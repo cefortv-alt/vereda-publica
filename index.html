@@ -412,7 +412,7 @@ const UNITS = [{"id":"c01","trilha":"concursos","title":"Língua Portuguesa","ic
 const DIVISIONS = ["Menor-Aprendiz", "Estagiário", "Terceirizado", "Efetivo", "Chefe de Divisão", "Coordenador", "Coordenador Geral", "Diretor", "Presidente", "Secretário Executivo", "Ministro", "Professor"];
 const TRILHAS = [
   { id: "rpps", label: "RPPS", heroTitle: "RPPS — Regime Próprio de Previdência Social", icon: "✚", finishLine: "Rumo à Certificação" },
-  { id: "concursos", label: "Concursos Públicos", heroTitle: "Administração Pública & Gestão", icon: "◈", finishLine: "Rumo à posse" }
+  { id: "concursos", label: "Concursos Públicos", heroTitle: "A aprovação se constrói questão por questão", icon: "◈", finishLine: "Rumo à posse" }
 ];
 function unitsForTrilha(trilha){ return UNITS.filter(u => u.trilha === trilha); }
 const BOT_NAMES = ["Marina T.", "Carlos E.", "Fernanda R.", "Bruno S.", "Patrícia L.", "Eduardo M.", "Camila V.", "Rafael N.", "Juliana P.", "André C.", "Beatriz A.", "Diego F.", "Larissa Q.", "Vanessa D.", "Gustavo B.", "Renata K.", "Felipe O."];
@@ -745,6 +745,38 @@ function useSkip(){
   return true;
 }
 
+/* ================= LOJA DE XP (Pix, confirmação manual) =================
+   Pagamento simples: o aluno vê a chave/QR Pix, faz o pagamento por fora do app e toca em
+   "Já fiz o Pix" — isso apenas registra um pedido pendente (tabela xp_purchases no Supabase),
+   SEM liberar XP automaticamente. A liberação do XP é manual: confira o pedido e o
+   recebimento no seu extrato Pix e credite o XP direto na coluna "xp" da tabela profiles pelo
+   Table Editor do Supabase (e marque o pedido como "confirmado"). */
+const XP_PACKAGES = [
+  { id: "xp1000", label: "1.000 XP", price: "R$ 4,99", xp: 1000 },
+  { id: "xp5000", label: "5.000 XP", price: "R$ 9,99", xp: 5000 },
+  { id: "xpunlimited", label: "XP ilimitado no mês", price: "R$ 19,67", xp: null }
+];
+// Defina aqui a chave Pix (ou "copia e cola") assim que Thiago enviar; enquanto estiver vazia,
+// a loja mostra um aviso de que o pagamento ainda será configurado.
+const PIX_KEY = "00020101021126360014br.gov.bcb.pix0114303580700001875204000053039865802BR5908CEFOR TV6009SAO PAULO622905251M1PBCKD54M6QV4E8GVZYM4ED6304A03B";
+const PIX_QR_IMG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAWgAAAFoAQAAAABSnlx4AAAC00lEQVR4nO2byW4DMQxDycL//8vsQZsToIciDio17jozfQdCFWSJ9lD4xcfXb+BLX/rPaSgSXJAgQJDdQf6VhPronkovAAIA5iNRBAGBoEQV0Uf3VHoBsOB6fEELOOJfICqIRrqn0qsuCcACbZGmQAHcVtQ+uv8BLQGE8sZTfqs0PXWPoheAiLEVjkpxVaj1fiWfQT/0Jz9+BtpH91R6Ze4CAEVQtAXTFkpxI/ronkovC2lGVVFW7LdFmjKoke6p9GMHYi1JlW5l16K3K/kMGor5cSsrsrIuv6h5s4/uqfQCQNFCunXgXkMy++1nH92DaQoCWWMm4FO8V3F6pjfTPZJe8BKNiDC9fvgyqrx+s5LPoMOv8sBmn2KxtgT3/ObtT16nIdmKKeX6uLuy9Yc775ygI7555f2KRzl7F3vWR/dsWqjIgoTcm/XF1GbNu14eopUulWA7DQRlPYuYw87dbzhAQ1vNjtlG4VFFhYk/99E9lV6wLlAUibBhY/xh+ie4/ckRuiLqgw3D9fYukfJJk7d+H6CXT5CEKHncY3s4rsI5bKR7Kv3gkNigidxWoy2lBuL6sQfoMLt9e2GPdFqzZdj20T2YtlFetM4btkWsNK9oPSJvP3iCNv9EpNux7p8Ikduil5y7Xp6gmW1IHTixEhK7l9p6mD66B9MxRdpuAwEwz0FQysy/+X2AriyOW1bLXa2Lb9f30T2VdiOw3CptBizi1u3YO8+/TC9ktWaciEjrKs625dDZR/dUOswpb0rCDY+nefj77s+fobfTr5bWXrxRvgluP3iO3s8P1oETL9i5q+apfvP7Zfrh/QZGjpdjFecHbdrvo3sq/fR+w9MWmj9A9Ix9dE+l9/NqyG8vM7VyekHpo3sqvZ7uM7OjhIdJqzvPH6PzCISHO94iiXqeI2gz3QPpOM8G90rSnrJTVf6eWmwg99E9ld7fPvtbJZe+9Hn6G7az6/2ClLL6AAAAAElFTkSuQmCC";
+let xpStoreSelected = null;
+let xpStoreRequestSent = false;
+function requestXpPurchase(pkg){
+  xpStoreRequestSent = true;
+  if (sb && cloudUser) {
+    sb.from("xp_purchases").insert({
+      user_id: cloudUser.id,
+      user_email: cloudUser.email,
+      user_name: cloudUser.name,
+      package_id: pkg.id,
+      package_label: pkg.label,
+      price: pkg.price,
+      status: "pendente"
+    }).then(({ error }) => { if (error) console.error("xp_purchases insert", error); });
+  }
+}
+
 /* ================= ÍCONES ================= */
 const app = document.getElementById("app");
 function heartsIcon(filled){ return '<svg viewBox="0 0 24 24" fill="'+(filled?'currentColor':'none')+'" stroke="currentColor" stroke-width="2"><path d="M12 21s-7.5-4.6-10-9.3C.5 8.4 2.4 5 6 5c2 0 3.4 1.1 4 2.2C10.6 6.1 12 5 14 5c3.6 0 5.5 3.4 4 6.7C19.5 16.4 12 21 12 21z"/></svg>'; }
@@ -766,7 +798,7 @@ function renderTopbar(){
     '<div class="stats">' +
       '<div class="stat streak">'+flameIcon()+'<span class="mono">'+state.streak+'</span></div>' +
       '<div class="stat hearts">'+heartsIcon(true)+'<span class="mono">'+state.hearts+'</span></div>' +
-      '<div class="stat xp">'+coinIcon()+'<span class="mono">'+state.xp+'</span></div>' +
+      '<button class="stat xp" id="xpBuyBtn" title="Comprar XP" aria-label="Comprar XP" style="border:none;background:none;cursor:pointer;">'+coinIcon()+'<span class="mono">'+state.xp+'</span></button>' +
       '<button class="theme-btn" id="themeBtn" title="Alternar tema" aria-label="Alternar tema">◐</button>' +
       (sb ? renderAccountChip() : '') +
     '</div>' +
@@ -793,6 +825,8 @@ function attachTopbarListeners(){
   document.getElementById("themeBtn").addEventListener("click", toggleTheme);
   const acBtn = document.getElementById("accountBtn");
   if (acBtn) acBtn.addEventListener("click", () => { cloudUser ? signOutCloud() : signInWithGoogle(); });
+  const xpBuyBtn = document.getElementById("xpBuyBtn");
+  if (xpBuyBtn) xpBuyBtn.addEventListener("click", () => { xpStoreSelected = null; xpStoreRequestSent = false; currentScreen = "xpstore"; render(); });
   const avBtn = document.getElementById("avatarBtn");
   if (avBtn) avBtn.addEventListener("click", () => { avatarPickerOpen = !avatarPickerOpen; render(); });
   document.querySelectorAll(".ap-opt").forEach(btn => {
@@ -837,6 +871,7 @@ function render(){
   if (currentScreen === "league") renderLeagueScreen();
   else if (currentScreen === "speed") renderSpeedScreen();
   else if (currentScreen === "forca") renderForcaScreen();
+  else if (currentScreen === "xpstore") renderXpStoreScreen();
   else renderHome();
 }
 function renderLoginGate(){
@@ -1011,6 +1046,59 @@ function renderLeagueScreen(){
 /* ================= RENDER: GP — CORRIDA INTELECTUAL (sinônimos e antônimos) ================= */
 function clearSpeedTimer(){ if (speedTimerId) { clearInterval(speedTimerId); speedTimerId = null; } }
 
+function renderXpStoreScreen(){
+  let html = renderTopbar();
+  html += '<div class="hero">' +
+    '<div class="eyebrow">🪙 Loja de XP</div>' +
+    '<h1 class="display">Acelere sua trilha</h1>' +
+    '<p>Além dos pulos gratuitos (a cada '+SKIP_XP_STEP+' XP você ganha +'+SKIP_CREDITS_PER_STEP+'), você pode comprar XP extra via Pix.</p>' +
+  '</div>';
+
+  if (!cloudUser) {
+    html += '<div style="padding:0 20px 20px;"><p>Entre com sua conta Google para comprar XP — o pedido fica vinculado à sua conta.</p></div>';
+  } else if (xpStoreRequestSent) {
+    html += '<div style="padding:0 20px 20px;">' +
+      '<div class="bonus-badge skip-badge">✅ Pedido registrado! Assim que confirmarmos o Pix, o XP é creditado na sua conta. Isso pode levar algumas horas.</div>' +
+    '</div>';
+  } else if (xpStoreSelected) {
+    const pkg = XP_PACKAGES.find(p => p.id === xpStoreSelected);
+    html += '<div style="padding:0 20px 20px;">' +
+      '<div class="podcast-card"><div class="pc-body">' +
+        '<div class="pc-title">'+pkg.label+' — '+pkg.price+'</div>' +
+        (PIX_KEY
+          ? '<div class="pc-desc">Escaneie o QR Code no seu app do banco (digite o valor '+pkg.price+') ou copie o código Pix abaixo. Depois, toque em "Já fiz o Pix" — a confirmação é manual e pode levar algumas horas.</div>' +
+            '<img src="'+PIX_QR_IMG+'" alt="QR Code Pix" style="display:block;width:160px;height:160px;margin:10px auto 6px;border-radius:8px;border:1px solid var(--paper-line);">' +
+            '<p class="mono" style="user-select:all;word-break:break-all;margin-top:8px;font-size:11px;">'+PIX_KEY+'</p>'
+          : '<div class="pc-desc">O pagamento por Pix ainda está sendo configurado. Volte em breve!</div>') +
+      '</div></div>' +
+      (PIX_KEY ? '<button class="btn primary" id="confirmPixBtn" style="margin-top:12px;">Já fiz o Pix</button>' : '') +
+      '<button class="btn" id="backXpStoreBtn" style="margin-top:8px;">Voltar</button>' +
+    '</div>';
+  } else {
+    html += '<div class="podcast-list" style="margin:16px 18px;">' +
+      XP_PACKAGES.map(p => '<button class="podcast-card" data-pkg="'+p.id+'" style="width:100%;text-align:left;cursor:pointer;">' +
+        '<div class="pc-icon">🪙</div>' +
+        '<div class="pc-body"><div class="pc-title">'+p.label+'</div><div class="pc-desc">'+p.price+'</div></div>' +
+      '</button>').join('') +
+    '</div>';
+  }
+  html += bottomNavHtml();
+
+  app.innerHTML = html;
+  attachTopbarListeners();
+  attachNavListeners();
+  document.querySelectorAll("[data-pkg]").forEach(btn => {
+    btn.addEventListener("click", () => { xpStoreSelected = btn.dataset.pkg; render(); });
+  });
+  const backBtn = document.getElementById("backXpStoreBtn");
+  if (backBtn) backBtn.addEventListener("click", () => { xpStoreSelected = null; render(); });
+  const confirmBtn = document.getElementById("confirmPixBtn");
+  if (confirmBtn) confirmBtn.addEventListener("click", () => {
+    const pkg = XP_PACKAGES.find(p => p.id === xpStoreSelected);
+    if (pkg) requestXpPurchase(pkg);
+    render();
+  });
+}
 function renderSpeedScreen(){
   if (speedSession && speedSession.active) { renderSpeedPlay(); return; }
   if (speedSession && speedSession.finished) { renderSpeedSummary(); return; }
