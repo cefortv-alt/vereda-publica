@@ -2,17 +2,12 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Vereda Pública</title>
-<meta name="description" content="Trilhas de estudo gamificadas para concursos públicos e certificação RPPS.">
-<meta name="theme-color" content="#1B2A4A">
-<link rel="manifest" href="manifest.json">
-<link rel="icon" href="favicon-32.png" type="image/png">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Vereda">
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" href="./icon-192.png">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<meta name="theme-color" content="#F6C453">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Karla:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
 
@@ -336,7 +331,8 @@
   .forca-clue { font-size: 14.5px; color: var(--text-dim); line-height: 1.5; margin: 14px 0 18px; padding: 12px 14px; background: var(--paper-card); border-radius: 12px; border: 1px solid var(--paper-line); }
   .forca-figure { display: flex; justify-content: center; margin: 6px 0 10px; }
   .forca-figure svg { width: 110px; height: 110px; }
-  .forca-word { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin: 14px 0 20px; font-family: 'Fraunces', serif; }
+  .forca-word { display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-end; row-gap: 10px; column-gap: 14px; margin: 14px 0 20px; font-family: 'Fraunces', serif; }
+  .forca-word-group { display: inline-flex; gap: 6px; }
   .forca-letter-slot { min-width: 22px; text-align: center; border-bottom: 3px solid var(--ink-soft); font-size: 22px; font-weight: 700; padding-bottom: 2px; }
   .forca-letter-slot.space { border-bottom: none; min-width: 14px; }
   .forca-lives { text-align: center; font-size: 13px; color: var(--text-dim); margin-bottom: 6px; }
@@ -393,8 +389,9 @@
   .lg-card p { color: var(--text-dim); font-size: 14.5px; line-height: 1.5; margin: 0 0 26px; }
   .lg-card .btn.primary { max-width: 280px; }
 </style>
-</head>
 <body>
+
+
 <div id="app"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.4/dist/umd/supabase.js"></script>
@@ -442,7 +439,7 @@ function shuffle(arr){ const a = arr.slice(); for (let i = a.length-1; i>0; i--)
 function fmtCountdown(ms){ const total = Math.max(0, Math.ceil(ms/1000)); const m = Math.floor(total/60); const s = total%60; return m+':'+(s<10?'0':'')+s; }
 function strHash(str){ let h = 2166136261; for (let i=0;i<str.length;i++){ h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
 function seededRand(seed){ let s = seed >>> 0; return function(){ s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s / 4294967296; }; }
-function mondayKey(d){ const dt = new Date(d); const day = (dt.getDay() + 6) % 7; dt.setDate(dt.getDate() - day); dt.setHours(0,0,0,0); return dt.toISOString().slice(0,10); }
+function mondayKey(d){ const dt = new Date(d); const day = (dt.getDay() + 6) % 7; dt.setDate(dt.getDate() - day); dt.setHours(0,0,0,0); return localDateKey(dt); }
 
 function getLeagueBots(weekKey, divisionIdx, trilha){
   const seed = weekKey + "|" + divisionIdx + "|" + (trilha || "concursos");
@@ -662,11 +659,18 @@ function saveState(opts){
   try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch(e) { /* ignora: modo privado ou storage bloqueado */ }
   if (!(opts && opts.skipCloud)) pushToCloudDebounced();
 }
-function todayStr(){ return new Date().toISOString().slice(0,10); }
+function localDateKey(d){
+  const dt = d || new Date();
+  const y = dt.getFullYear();
+  const m = String(dt.getMonth() + 1).padStart(2, "0");
+  const day = String(dt.getDate()).padStart(2, "0");
+  return y + "-" + m + "-" + day;
+}
+function todayStr(){ return localDateKey(new Date()); }
 function bumpStreak(){
   const today = todayStr();
   if (state.lastDay === today) return;
-  const y = new Date(Date.now() - 86400000).toISOString().slice(0,10);
+  const y = localDateKey(new Date(Date.now() - 86400000));
   state.streak = (state.lastDay === y) ? state.streak + 1 : 1;
   state.lastDay = today;
 }
@@ -781,7 +785,7 @@ function requestXpPurchase(pkg){
 const app = document.getElementById("app");
 function heartsIcon(filled){ return '<svg viewBox="0 0 24 24" fill="'+(filled?'currentColor':'none')+'" stroke="currentColor" stroke-width="2"><path d="M12 21s-7.5-4.6-10-9.3C.5 8.4 2.4 5 6 5c2 0 3.4 1.1 4 2.2C10.6 6.1 12 5 14 5c3.6 0 5.5 3.4 4 6.7C19.5 16.4 12 21 12 21z"/></svg>'; }
 function flameIcon(){ return '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c1 3-2 4-2 7a3 3 0 006 0c1.6 1.6 2 3.6 2 5a6 6 0 11-12 0c0-4 2-6 3-8 .5 1 1 1.5 1.5 1.5C11 7.5 11 4 12 2z"/></svg>'; }
-function coinIcon(){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M9 12h6M12 9v6"/></svg>'; }
+function coinIcon(){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><ellipse cx="12" cy="18" rx="8" ry="3"/><path d="M4 18v-4"/><path d="M20 18v-4"/><ellipse cx="12" cy="14" rx="8" ry="3"/><path d="M4 14v-4"/><path d="M20 14v-4"/><ellipse cx="12" cy="10" rx="8" ry="3"/></svg>'; }
 function pathIcon(){ return '<img class="nav-icon-img" src="'+ICON_IMAGES.trilha+'" alt="Trilha">'; }
 function doorIcon(){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3H6a2 2 0 00-2 2v14a2 2 0 002 2h3"/><polyline points="15 17 20 12 15 7"/><line x1="20" y1="12" x2="9" y2="12"/></svg>'; }
 function trophyIcon(){ return '<img class="nav-icon-img" src="'+ICON_IMAGES.liga+'" alt="Liga">'; }
@@ -937,7 +941,7 @@ function renderHome(){
     '<h1 class="display">'+trilha.heroTitle+'</h1>' +
     '<p>'+completedCount()+' de '+totalLessons()+' lições concluídas</p>' +
     (hasTrilhaMedal(state.activeTrilha) ? '<div class="bonus-badge">🏅 Trilha concluída — modo revisão ativo, continue ganhando XP!</div>' : '') +
-    (mySkips > 0 ? '<div class="bonus-badge skip-badge">🔓 Você tem '+mySkips+' pulo'+(mySkips===1?'':'s')+' — toque em qualquer bloco trancado para acessá-lo direto (a cada '+SKIP_XP_STEP+' XP você ganha +'+SKIP_CREDITS_PER_STEP+')</div>' : '') +
+    (mySkips > 0 ? '<div class="bonus-badge skip-badge">🔓 Você tem '+mySkips+' pulo'+(mySkips===1?'':'s')+' — toque em qualquer bloco trancado para acessá-lo direto (a cada '+SKIP_XP_STEP+' XP você ganha +'+SKIP_CREDITS_PER_STEP+')</div>' : '<button type="button" id="skipPromoBtn" class="bonus-badge skip-badge" style="border:none;text-align:left;cursor:pointer;">🔓 A cada '+SKIP_XP_STEP+' XP você ganha '+SKIP_CREDITS_PER_STEP+' pulos grátis para destravar qualquer bloco — ou toque aqui para comprar XP extra via Pix</button>') +
   '</div>';
 
   unitsForTrilha(state.activeTrilha).forEach((u) => {
@@ -989,6 +993,8 @@ function renderHome(){
   });
   const heartsBanner = document.getElementById("heartsBanner");
   if (heartsBanner) heartsBanner.addEventListener("click", renderHeartsWaiting);
+  const skipPromoBtn = document.getElementById("skipPromoBtn");
+  if (skipPromoBtn) skipPromoBtn.addEventListener("click", () => { xpStoreSelected = null; xpStoreRequestSent = false; currentScreen = "xpstore"; render(); });
   attachTopbarListeners();
   attachTrilhaSwitcherListeners();
   attachNavListeners();
@@ -1051,14 +1057,14 @@ function renderXpStoreScreen(){
   html += '<div class="hero">' +
     '<div class="eyebrow">🪙 Loja de XP</div>' +
     '<h1 class="display">Acelere sua trilha</h1>' +
-    '<p>Além dos pulos gratuitos (a cada '+SKIP_XP_STEP+' XP você ganha +'+SKIP_CREDITS_PER_STEP+'), você pode comprar XP extra via Pix.</p>' +
+    '<p>Além dos '+SKIP_CREDITS_PER_STEP+' pulos gratuitos que você ganha a cada '+SKIP_XP_STEP+' XP conquistados, você pode comprar XP extra via Pix.</p>' +
   '</div>';
 
   if (!cloudUser) {
     html += '<div style="padding:0 20px 20px;"><p>Entre com sua conta Google para comprar XP — o pedido fica vinculado à sua conta.</p></div>';
   } else if (xpStoreRequestSent) {
     html += '<div style="padding:0 20px 20px;">' +
-      '<div class="bonus-badge skip-badge">✅ Pedido registrado! Assim que confirmarmos o Pix, o XP é creditado na sua conta. Isso pode levar algumas horas.</div>' +
+      '<div class="bonus-badge skip-badge">✅ Pedido registrado! Assim que confirmarmos o Pix, o XP é creditado na sua conta. Isso pode levar alguns instantes.</div>' +
     '</div>';
   } else if (xpStoreSelected) {
     const pkg = XP_PACKAGES.find(p => p.id === xpStoreSelected);
@@ -1066,7 +1072,7 @@ function renderXpStoreScreen(){
       '<div class="podcast-card"><div class="pc-body">' +
         '<div class="pc-title">'+pkg.label+' — '+pkg.price+'</div>' +
         (PIX_KEY
-          ? '<div class="pc-desc">Escaneie o QR Code no seu app do banco (digite o valor '+pkg.price+') ou copie o código Pix abaixo. Depois, toque em "Já fiz o Pix" — a confirmação é manual e pode levar algumas horas.</div>' +
+          ? '<div class="pc-desc">Escaneie o QR Code no seu app do banco (digite o valor '+pkg.price+') ou copie o código Pix abaixo. Depois, toque em "Já fiz o Pix" — a confirmação é manual e pode levar alguns instantes.</div>' +
             '<img src="'+PIX_QR_IMG+'" alt="QR Code Pix" style="display:block;width:160px;height:160px;margin:10px auto 6px;border-radius:8px;border:1px solid var(--paper-line);">' +
             '<p class="mono" style="user-select:all;word-break:break-all;margin-top:8px;font-size:11px;">'+PIX_KEY+'</p>'
           : '<div class="pc-desc">O pagamento por Pix ainda está sendo configurado. Volte em breve!</div>') +
@@ -1139,7 +1145,7 @@ function endSpeedRound(){
   speedSession.active = false;
   speedSession.finished = true;
   if (speedSession.score > state.speedHighScore) { state.speedHighScore = speedSession.score; saveState(); }
-  if (speedSession.score > 0) { addXP(speedSession.score, state.activeTrilha); saveState(); }
+  if (speedSession.score > 0) { addXP(speedSession.score, state.activeTrilha); bumpStreak(); saveState(); }
   renderSpeedSummary();
 }
 
@@ -1273,7 +1279,9 @@ function renderForcaPlay(){
       '<div class="forca-figure">'+forcaFigureSvg(forcaSession.wrong)+'</div>' +
       '<div class="forca-lives">Chances restantes: '+remaining+'</div>' +
       '<div class="forca-clue">💡 '+forcaSession.definition+'</div>' +
-      '<div class="forca-word">' + forcaMaskedWord().split("").map(ch => ch === " " ? '<span class="forca-letter-slot space">&nbsp;&nbsp;</span>' : '<span class="forca-letter-slot">'+ch+'</span>').join("") + '</div>' +
+      '<div class="forca-word">' + forcaMaskedWord().split(" ").map(word =>
+        '<span class="forca-word-group">' + word.split("").map(ch => '<span class="forca-letter-slot">'+ch+'</span>').join("") + '</span>'
+      ).join("") + '</div>' +
       '<div class="forca-keyboard" id="forcaKb">' +
         FORCA_KEYBOARD.map(l => '<button class="forca-key" data-l="'+l+'">'+l+'</button>').join("") +
       '</div>' +
@@ -1560,10 +1568,3 @@ initCloudAuth();
 
 })();
 </script>
-<script>
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => { navigator.serviceWorker.register("sw.js").catch(()=>{}); });
-}
-</script>
-</body>
-</html>
