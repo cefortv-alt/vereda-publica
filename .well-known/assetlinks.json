@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.ipate.veredapublica",
+    "sha256_cert_fingerprints": ["27:E0:2F:12:42:8B:D3:1C:2F:B8:0B:EE:34:0A:31:1F:2B:51:0E:C7:03:91:D0:29:FA:30:D6:A7:A7:03:FC:BD"]
+  }
+}]
