@@ -1163,6 +1163,7 @@ function renderLoginGate(){
   let html = '<div class="login-gate">' +
     '<div class="lg-brand">Vereda Pública</div>' +
     inner +
+    '<div class="footer-note" style="max-width:340px;margin:0 auto;line-height:1.5;">O Vereda Pública é um aplicativo educacional independente, produzido pelo IPATE (Instituto de Pesquisas Avançadas em Tecnologia e Educação), entidade privada. <strong>Não possui vínculo, afiliação ou representação oficial com nenhum órgão ou entidade governamental.</strong> As leis e normativos citados nas questões têm caráter informativo/didático; consulte as fontes oficiais em <a href="https://www.gov.br" target="_blank" style="color:inherit;">gov.br</a> e <a href="https://www.planalto.gov.br/ccivil_03" target="_blank" style="color:inherit;">planalto.gov.br/ccivil_03</a>.</div>' +
     '<div class="footer-note">Precisa de ajuda? <a href="mailto:cefortv@gmail.com" style="color:inherit;">cefortv@gmail.com</a></div>' +
   '</div>';
   app.innerHTML = html;
@@ -1310,6 +1311,7 @@ function renderHome(){
 
   html += '<div class="finish-stamp"><div class="t1">Continue firme</div><div class="t2">'+(TRILHAS.find(t=>t.id===state.activeTrilha)||TRILHAS[0]).finishLine+'</div></div>';
   html += '<div class="footer-note">Vereda Pública · Precisa de ajuda? <a href="mailto:cefortv@gmail.com" style="color:inherit;">cefortv@gmail.com</a></div>';
+  html += '<div class="footer-note" style="max-width:340px;margin:0 auto;line-height:1.5;">Aplicativo educacional independente, produzido pelo IPATE — sem vínculo com órgãos governamentais. Fontes oficiais das legislações citadas: <a href="https://www.gov.br" target="_blank" style="color:inherit;">gov.br</a> e <a href="https://www.planalto.gov.br/ccivil_03" target="_blank" style="color:inherit;">planalto.gov.br/ccivil_03</a>.</div>';
   html += bottomNavHtml();
 
   app.innerHTML = html;
