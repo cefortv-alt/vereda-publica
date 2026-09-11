@@ -601,6 +601,14 @@ function pushToCloudDebounced(){
   clearTimeout(cloudSyncTimer);
   cloudSyncTimer = setTimeout(pushToCloudNow, 900);
 }
+// Salvaguarda: se o app for fechado/minimizado antes dos 900ms do debounce (comum em PWA/TWA
+// no Android, onde o sistema pode encerrar o app rapidamente), força o envio imediato para a
+// nuvem em vez de perder a atualização pendente (ex.: streak do dia, XP, lição concluída).
+function flushCloudSyncNow(){
+  if (cloudSyncTimer) { clearTimeout(cloudSyncTimer); cloudSyncTimer = null; pushToCloudNow(); }
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushCloudSyncNow(); });
+window.addEventListener("pagehide", flushCloudSyncNow);
 
 function initCloudAuth(){
   if (!sb) { cloudAuthChecked = true; return; }
@@ -768,7 +776,7 @@ function useSkip(){
 }
 
 /* ================= SIMULE SUA PROVA (simulado cronometrado) =================
-   Simulado de 80 questões da trilha Concursos Públicos, sorteadas por matéria
+   Simulado de 40 questões da trilha Concursos Públicos, sorteadas por matéria
    (peso maior nas matérias mais cobradas) + um bloco aleatório de reforço, com limite
    de 4 horas cronometradas. A cada 1000 XP acumulados, o aluno ganha direito a gerar
    mais um simulado (state.simuladosGerados controla quantos já foram usados). */
@@ -879,8 +887,8 @@ function renderSimuladoConfirm(){
   html += '<div class="hero">' +
     '<div class="eyebrow">📝 Simule sua prova</div>' +
     '<h1 class="display">Pronto para o simulado?</h1>' +
-    '<p>80 questões sorteadas da trilha Concursos Públicos (Português, Raciocínio Lógico, Informática, Atualidades, Constitucional, Administrativo e um bloco aleatório de reforço), com 4 horas cronometradas — assim que o tempo esgotar, o simulado é enviado automaticamente com o que estiver respondido até então.</p>' +
-    '<div class="bonus-badge" style="background:var(--paper-line);">⚠️ Atenção: uma vez iniciado, o cronômetro não para nem pausa. Só comece quando tiver as 4 horas disponíveis (ou tempo suficiente para o que pretende responder).</div>' +
+    '<p>'+EXAM_TOTAL_QUESTIONS+' questões sorteadas da trilha Concursos Públicos (Português, Raciocínio Lógico, Informática, Atualidades, Constitucional, Administrativo e um bloco aleatório de reforço), com 2 horas cronometradas — assim que o tempo esgotar, o simulado é enviado automaticamente com o que estiver respondido até então.</p>' +
+    '<div class="bonus-badge" style="background:var(--paper-line);">⚠️ Atenção: uma vez iniciado, o cronômetro não para nem pausa. Só comece quando tiver as 2 horas disponíveis (ou tempo suficiente para o que pretende responder).</div>' +
   '</div>' +
   '<div style="padding:0 18px 18px;display:flex;gap:10px;flex-wrap:wrap;">' +
     '<button class="btn" id="simuladoCancelBtn">Cancelar</button>' +
@@ -1289,7 +1297,7 @@ function renderHome(){
     } else {
       const disponiveis = simuladosAvailable();
       html += '<button type="button" id="simuladoStartCardBtn" class="unit-banner" style="width:100%;text-align:left;cursor:'+(disponiveis>0?'pointer':'default')+';border:none;margin-bottom:14px;"'+(disponiveis>0?'':' disabled')+'>' +
-        '<div><div class="u-title">📝 Simule sua prova — '+EXAM_TOTAL_QUESTIONS+' questões, 4h cronometradas</div>' +
+        '<div><div class="u-title">📝 Simule sua prova — '+EXAM_TOTAL_QUESTIONS+' questões, 2h cronometradas</div>' +
         '<div class="u-sub">'+(disponiveis>0 ? disponiveis+' simulado'+(disponiveis===1?'':'s')+' disponível — toque para iniciar' : 'Faltam '+xpParaProximoSimulado()+' XP para liberar o próximo simulado')+'</div></div></button>';
     }
   }
