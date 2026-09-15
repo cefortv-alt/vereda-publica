@@ -88,6 +88,8 @@
     .bottom-nav { max-width: 900px; }
     .q-wrap { max-width: 760px; }
     .ap-grid { max-width: 760px; }
+    .onboarding-wrap { max-width: 860px; }
+    .onboarding-wrap .texto-bloco-body { font-size: 15.5px; }
   }
   @media (min-width: 1100px) and (pointer: fine) {
     #app { zoom: 1.12; }
@@ -317,6 +319,8 @@
   .nav-btn img.nav-icon-img { width: 44px; height: 44px; border-radius: 10px; object-fit: cover; display: block; }
   .nav-btn.active { color: var(--ink); }
   .nav-btn.nav-liga svg { color: var(--gold-deep); }
+  .bottom-nav.ghost { opacity: 0.24; transition: opacity .2s ease; }
+  .bottom-nav.ghost:hover, .bottom-nav.ghost:focus-within, .bottom-nav.ghost:active { opacity: 1; }
 
   /* ---------- Lesson overlay ---------- */
   .overlay {
@@ -1289,8 +1293,9 @@ function toggleTheme(){
 }
 
 /* ================= BOTTOM NAV ================= */
-function bottomNavHtml(){
-  return '<div class="bottom-nav">' +
+function bottomNavHtml(opts){
+  const ghost = opts && opts.ghost;
+  return '<div class="bottom-nav'+(ghost ? ' ghost' : '')+'">' +
     '<button class="nav-btn '+(currentScreen==='home'?'active':'')+'" data-screen="home">'+pathIcon()+'<span>Trilha</span></button>' +
     '<button class="nav-btn '+(currentScreen==='speed'?'active':'')+'" data-screen="speed">'+stopwatchIcon()+'<span>GP</span></button>' +
     '<button class="nav-btn '+(currentScreen==='forca'?'active':'')+'" data-screen="forca">'+forcaIcon()+'<span>Forca</span></button>' +
@@ -1490,17 +1495,17 @@ function renderHome(){
     '<h1 class="display">'+trilha.heroTitle+'</h1>' +
     '<p>'+completedCount()+' de '+totalLessons()+' lições concluídas</p>' +
     (hasTrilhaMedal(state.activeTrilha) ? '<div class="bonus-badge">🏅 Trilha concluída — modo revisão ativo, continue ganhando XP!</div>' : '') +
-    (state.activeTrilha === "rpps" ? '<button type="button" id="openBookBtn" class="unit-banner" style="width:100%;text-align:left;cursor:pointer;border:none;margin-bottom:10px;"><div><div class="u-title">📘 Leia a obra completa: Governança, Compliance e Responsabilidade Fiscal nos RPPS</div><div class="u-sub">Toque para abrir o livro</div></div></button>' : '') +
+    (state.activeTrilha === "rpps" ? '<button type="button" id="openBookBtn" class="unit-banner" style="text-align:left;cursor:pointer;border:none;margin-bottom:10px;"><div><div class="u-title">📘 Leia a obra completa: Governança, Compliance e Responsabilidade Fiscal nos RPPS</div><div class="u-sub">Toque para abrir o livro</div></div></button>' : '') +
     (mySkips > 0 ? '<div class="bonus-badge skip-badge">🔓 Você tem '+mySkips+' pulo'+(mySkips===1?'':'s')+' — toque em qualquer bloco trancado para acessá-lo direto (a cada '+SKIP_XP_STEP+' XP você ganha +'+SKIP_CREDITS_PER_STEP+')</div>' : '<button type="button" id="skipPromoBtn" class="bonus-badge skip-badge" style="border:none;text-align:left;cursor:pointer;">🔓 A cada '+SKIP_XP_STEP+' XP você ganha '+SKIP_CREDITS_PER_STEP+' pulos grátis para destravar qualquer bloco — ou toque aqui para comprar XP extra via Pix</button>') +
   '</div>';
 
   if (state.activeTrilha === "concursos") {
     if (simuladoSession && !simuladoSession.finished) {
-      html += '<button type="button" id="simuladoResumeBtn" class="unit-banner" style="width:100%;text-align:left;cursor:pointer;border:none;margin-bottom:14px;background:var(--gold-deep);color:#fff;">' +
+      html += '<button type="button" id="simuladoResumeBtn" class="unit-banner" style="text-align:left;cursor:pointer;border:none;margin-bottom:14px;background:var(--gold-deep);color:#fff;">' +
         '<div><div class="u-title">📝 Simulado em andamento — questão '+(simuladoSession.index+1)+' de '+simuladoSession.questions.length+'</div><div class="u-sub">Toque para continuar (o cronômetro não parou)</div></div></button>';
     } else {
       const disponiveis = simuladosAvailable();
-      html += '<button type="button" id="simuladoStartCardBtn" class="unit-banner" style="width:100%;text-align:left;cursor:'+(disponiveis>0?'pointer':'default')+';border:none;margin-bottom:14px;"'+(disponiveis>0?'':' disabled')+'>' +
+      html += '<button type="button" id="simuladoStartCardBtn" class="unit-banner" style="text-align:left;cursor:'+(disponiveis>0?'pointer':'default')+';border:none;margin-bottom:14px;"'+(disponiveis>0?'':' disabled')+'>' +
         '<div><div class="u-title">📝 Simule sua prova</div>' +
         '<div class="u-sub">'+(disponiveis>0 ? disponiveis+' simulado'+(disponiveis===1?'':'s')+' disponível ('+EXAM_TOTAL_QUESTIONS+' questões, 2h) — toque para iniciar' : 'Faltam '+xpParaProximoSimulado()+' XP para liberar o próximo simulado')+'</div></div></button>';
     }
@@ -1637,7 +1642,7 @@ function renderOnboardingScreen(){
     '<div class="overlay-top">' +
       (isFirstRun ? '<div></div>' : '<button class="close-btn" id="closeOnboarding" aria-label="Fechar">×</button>') +
     '</div>' +
-    '<div class="q-wrap" style="text-align:left;">' +
+    '<div class="q-wrap onboarding-wrap" style="text-align:left;">' +
       '<div class="eyebrow">Bem-vindo(a) à Vereda Pública</div>' +
       '<h1 class="display" style="margin-bottom:14px;">Como funciona o app</h1>' +
 
@@ -1910,7 +1915,7 @@ function renderBookScreen(){
       '<button class="btn" id="bookNextBtn">Próxima →</button>' +
     '</div>' +
   '</div>';
-  html += bottomNavHtml();
+  html += bottomNavHtml({ ghost: true });
   app.innerHTML = html;
   attachTopbarListeners();
   attachNavListeners();
@@ -1974,7 +1979,9 @@ function renderBookPage(){
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     const transform = outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : null;
     page.render({ canvasContext: ctx, viewport: viewport, transform: transform });
-    if (wrap) wrap.scrollLeft = 0;
+    // Mantém a página centralizada horizontalmente mesmo com zoom aplicado — sem isso, cada
+    // troca de página voltava o scroll pro extremo esquerdo, "puxando" o texto pra lateral.
+    if (wrap) wrap.scrollLeft = Math.max(0, (viewport.width - wrap.clientWidth) / 2);
     const ind = document.getElementById("bookPageIndicator");
     if (ind) ind.textContent = bookPageNum + " / " + bookNumPages;
     const prevOv = document.getElementById("bookPrevOverlay");
