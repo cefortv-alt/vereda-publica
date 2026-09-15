@@ -1314,7 +1314,10 @@ function render(){
   clearHeartsCountdown();
   clearSpeedTimer();
   if (currentScreen !== "simulado") clearSimuladoTimer();
-  if (currentScreen !== "livro" && bookSpeechActive) stopBookSpeech();
+  if (currentScreen !== "livro") {
+    if (bookSpeechActive) stopBookSpeech();
+    if (bookPageObserver) { bookPageObserver.disconnect(); bookPageObserver = null; }
+  }
   if (sb && !cloudUser) { renderLoginGate(); return; }
   if (!state.onboardingSeen && currentScreen !== "onboarding" && !session) { currentScreen = "onboarding"; }
   if (currentScreen === "onboarding") { renderOnboardingScreen(); return; }
@@ -1495,17 +1498,20 @@ function renderHome(){
     '<h1 class="display">'+trilha.heroTitle+'</h1>' +
     '<p>'+completedCount()+' de '+totalLessons()+' lições concluídas</p>' +
     (hasTrilhaMedal(state.activeTrilha) ? '<div class="bonus-badge">🏅 Trilha concluída — modo revisão ativo, continue ganhando XP!</div>' : '') +
-    (state.activeTrilha === "rpps" ? '<button type="button" id="openBookBtn" class="unit-banner" style="text-align:left;cursor:pointer;border:none;margin-bottom:10px;"><div><div class="u-title">📘 Leia a obra completa: Governança, Compliance e Responsabilidade Fiscal nos RPPS</div><div class="u-sub">Toque para abrir o livro</div></div></button>' : '') +
     (mySkips > 0 ? '<div class="bonus-badge skip-badge">🔓 Você tem '+mySkips+' pulo'+(mySkips===1?'':'s')+' — toque em qualquer bloco trancado para acessá-lo direto (a cada '+SKIP_XP_STEP+' XP você ganha +'+SKIP_CREDITS_PER_STEP+')</div>' : '<button type="button" id="skipPromoBtn" class="bonus-badge skip-badge" style="border:none;text-align:left;cursor:pointer;">🔓 A cada '+SKIP_XP_STEP+' XP você ganha '+SKIP_CREDITS_PER_STEP+' pulos grátis para destravar qualquer bloco — ou toque aqui para comprar XP extra via Pix</button>') +
   '</div>';
 
+  if (state.activeTrilha === "rpps") {
+    html += '<button type="button" id="openBookBtn" class="unit-banner" style="width:calc(100% - 36px);text-align:left;cursor:pointer;border:none;margin-bottom:10px;"><div><div class="u-title">📘 Leia a obra completa: Governança, Compliance e Responsabilidade Fiscal nos RPPS</div><div class="u-sub">Toque para abrir o livro</div></div></button>';
+  }
+
   if (state.activeTrilha === "concursos") {
     if (simuladoSession && !simuladoSession.finished) {
-      html += '<button type="button" id="simuladoResumeBtn" class="unit-banner" style="text-align:left;cursor:pointer;border:none;margin-bottom:14px;background:var(--gold-deep);color:#fff;">' +
+      html += '<button type="button" id="simuladoResumeBtn" class="unit-banner" style="width:calc(100% - 36px);text-align:left;cursor:pointer;border:none;margin-bottom:14px;background:var(--gold-deep);color:#fff;">' +
         '<div><div class="u-title">📝 Simulado em andamento — questão '+(simuladoSession.index+1)+' de '+simuladoSession.questions.length+'</div><div class="u-sub">Toque para continuar (o cronômetro não parou)</div></div></button>';
     } else {
       const disponiveis = simuladosAvailable();
-      html += '<button type="button" id="simuladoStartCardBtn" class="unit-banner" style="text-align:left;cursor:'+(disponiveis>0?'pointer':'default')+';border:none;margin-bottom:14px;"'+(disponiveis>0?'':' disabled')+'>' +
+      html += '<button type="button" id="simuladoStartCardBtn" class="unit-banner" style="width:calc(100% - 36px);text-align:left;cursor:'+(disponiveis>0?'pointer':'default')+';border:none;margin-bottom:14px;"'+(disponiveis>0?'':' disabled')+'>' +
         '<div><div class="u-title">📝 Simule sua prova</div>' +
         '<div class="u-sub">'+(disponiveis>0 ? disponiveis+' simulado'+(disponiveis===1?'':'s')+' disponível ('+EXAM_TOTAL_QUESTIONS+' questões, 2h) — toque para iniciar' : 'Faltam '+xpParaProximoSimulado()+' XP para liberar o próximo simulado')+'</div></div></button>';
     }
@@ -1863,14 +1869,21 @@ let bookNumPages = 0;
 let bookZoom = 1;
 let bookSpeechActive = false;
 let bookSpeechUtterance = null;
+let bookPageObserver = null;
+let bookRenderedPages = {}; // pageNum -> true (já desenhado no canvas)
+let bookRenderTokens = {}; // pageNum -> token, evita corrida entre re-renders (troca de zoom) e o observer
 function stopBookSpeech(){
   bookSpeechActive = false;
   bookSpeechUtterance = null;
   if (window.speechSynthesis) window.speechSynthesis.cancel();
 }
+function updateBookSpeakBtn(){
+  const btn = document.getElementById("bookSpeakBtn");
+  if (btn) btn.textContent = bookSpeechActive ? "⏹ Parar leitura" : "🔊 Ouvir página "+bookPageNum;
+}
 function toggleBookSpeech(){
   if (!window.speechSynthesis || !bookDoc) return;
-  if (bookSpeechActive) { stopBookSpeech(); renderBookScreen(); return; }
+  if (bookSpeechActive) { stopBookSpeech(); updateBookSpeakBtn(); return; }
   bookDoc.getPage(bookPageNum).then(page => page.getTextContent()).then(content => {
     const texto = content.items.map(it => it.str).join(" ").replace(/\s+/g, " ").trim();
     if (!texto) return;
@@ -1879,56 +1892,46 @@ function toggleBookSpeech(){
     utter.lang = "pt-BR";
     const vozes = window.speechSynthesis.getVoices().filter(v => v.lang && v.lang.toLowerCase().indexOf("pt") === 0);
     if (vozes.length) utter.voice = vozes.find(v => v.lang.toLowerCase() === "pt-br") || vozes[0];
-    utter.onend = () => { bookSpeechActive = false; bookSpeechUtterance = null; if (currentScreen === "livro") renderBookScreen(); };
+    utter.onend = () => { bookSpeechActive = false; bookSpeechUtterance = null; updateBookSpeakBtn(); };
     utter.onerror = utter.onend;
     bookSpeechUtterance = utter;
     bookSpeechActive = true;
     window.speechSynthesis.speak(utter);
-    renderBookScreen();
+    updateBookSpeakBtn();
   });
 }
 const BOOK_ZOOM_MIN = 0.7;
 const BOOK_ZOOM_MAX = 2.6;
 const BOOK_ZOOM_STEP = 0.15;
 function renderBookScreen(){
+  bookRenderedPages = {};
+  bookRenderTokens = {};
   let html = renderTopbar();
   html += '<div class="hero">' +
-    '<div class="eyebrow">📘 Biblioteca RPPS</div>' +
+    '<div class="eyebrow" style="display:flex;align-items:center;justify-content:space-between;gap:10px;">📘 Biblioteca RPPS<button class="close-btn" id="closeBookBtn" aria-label="Fechar livro" style="padding:4px;margin:-4px;">×</button></div>' +
     '<h1 class="display">Governança, Compliance e Responsabilidade Fiscal nos RPPS</h1>' +
-    '<p>Leia a obra de referência completa, direto no app — sem precisar baixar nada.</p>' +
+    '<p>Leia a obra de referência completa, direto no app — role a tela para virar as páginas.</p>' +
   '</div>';
   html += '<div style="padding:0 18px 14px;text-align:center;">' +
     '<div style="margin:0 0 10px;display:flex;justify-content:center;align-items:center;gap:10px;flex-wrap:wrap;">' +
       '<button class="btn ghost" id="bookZoomOutBtn" style="width:44px;padding:8px;font-size:18px;" aria-label="Diminuir zoom">－</button>' +
       '<span class="mono" id="bookZoomIndicator" style="min-width:48px;font-size:13px;color:var(--text-dim);">'+Math.round(bookZoom*100)+'%</span>' +
       '<button class="btn ghost" id="bookZoomInBtn" style="width:44px;padding:8px;font-size:18px;" aria-label="Aumentar zoom">＋</button>' +
-      '<button class="btn" id="bookSpeakBtn">'+(bookSpeechActive ? "⏹ Parar leitura" : "🔊 Ouvir esta página")+'</button>' +
+      '<button class="btn" id="bookSpeakBtn">'+(bookSpeechActive ? "⏹ Parar leitura" : "🔊 Ouvir página "+bookPageNum)+'</button>' +
     '</div>' +
-    '<div id="bookCanvasWrap" style="position:relative;background:#fff;border:1px solid var(--paper-line);border-radius:12px;padding:8px;max-width:100%;overflow:auto;">' +
-      '<canvas id="bookCanvas" style="display:block;margin:0 auto;"></canvas>' +
-      '<button id="bookPrevOverlay" aria-label="Página anterior" style="position:sticky;float:left;left:6px;top:50%;transform:translateY(-50%);margin-top:-22px;width:44px;height:44px;border-radius:50%;border:none;background:rgba(27,42,74,0.55);color:#fff;font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:5;">‹</button>' +
-      '<button id="bookNextOverlay" aria-label="Próxima página" style="position:sticky;float:right;right:6px;top:50%;transform:translateY(-50%);margin-top:-22px;width:44px;height:44px;border-radius:50%;border:none;background:rgba(27,42,74,0.55);color:#fff;font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:5;">›</button>' +
-    '</div>' +
-    '<div style="margin-top:12px;display:flex;justify-content:center;align-items:center;gap:14px;flex-wrap:wrap;">' +
-      '<button class="btn" id="bookPrevBtn">← Anterior</button>' +
-      '<span class="mono" id="bookPageIndicator">'+bookPageNum+' / '+(bookNumPages||'…')+'</span>' +
-      '<button class="btn" id="bookNextBtn">Próxima →</button>' +
+    '<div class="mono" id="bookPageIndicator" style="font-size:12.5px;color:var(--text-dim);margin-bottom:8px;">Página '+bookPageNum+' de '+(bookNumPages||'…')+'</div>' +
+    '<div id="bookScrollWrap" style="position:relative;background:#fff;border:1px solid var(--paper-line);border-radius:12px;padding:8px;max-width:100%;max-height:70vh;overflow:auto;">' +
+      '<div id="bookPageList"></div>' +
     '</div>' +
   '</div>';
   html += bottomNavHtml({ ghost: true });
   app.innerHTML = html;
   attachTopbarListeners();
   attachNavListeners();
-  const prevBtn = document.getElementById("bookPrevBtn");
-  const nextBtn = document.getElementById("bookNextBtn");
+  const closeBtn = document.getElementById("closeBookBtn");
+  if (closeBtn) closeBtn.addEventListener("click", () => { stopBookSpeech(); currentScreen = "home"; render(); });
   const zoomOutBtn = document.getElementById("bookZoomOutBtn");
   const zoomInBtn = document.getElementById("bookZoomInBtn");
-  if (prevBtn) prevBtn.addEventListener("click", () => { if (bookPageNum > 1) { stopBookSpeech(); bookPageNum--; renderBookPage(); } });
-  if (nextBtn) nextBtn.addEventListener("click", () => { if (bookNumPages && bookPageNum < bookNumPages) { stopBookSpeech(); bookPageNum++; renderBookPage(); } });
-  const prevOverlay = document.getElementById("bookPrevOverlay");
-  const nextOverlay = document.getElementById("bookNextOverlay");
-  if (prevOverlay) { prevOverlay.style.visibility = bookPageNum > 1 ? "visible" : "hidden"; prevOverlay.addEventListener("click", () => { if (bookPageNum > 1) { stopBookSpeech(); bookPageNum--; renderBookPage(); } }); }
-  if (nextOverlay) { nextOverlay.style.visibility = (bookNumPages && bookPageNum < bookNumPages) ? "visible" : "hidden"; nextOverlay.addEventListener("click", () => { if (bookNumPages && bookPageNum < bookNumPages) { stopBookSpeech(); bookPageNum++; renderBookPage(); } }); }
   if (zoomOutBtn) zoomOutBtn.addEventListener("click", () => { setBookZoom(bookZoom - BOOK_ZOOM_STEP); });
   if (zoomInBtn) zoomInBtn.addEventListener("click", () => { setBookZoom(bookZoom + BOOK_ZOOM_STEP); });
   const speakBtn = document.getElementById("bookSpeakBtn");
@@ -1939,33 +1942,81 @@ function setBookZoom(z){
   bookZoom = Math.max(BOOK_ZOOM_MIN, Math.min(BOOK_ZOOM_MAX, z));
   const ind = document.getElementById("bookZoomIndicator");
   if (ind) ind.textContent = Math.round(bookZoom*100) + "%";
-  renderBookPage();
+  // Zoom novo invalida os cálculos de tamanho de todas as páginas já desenhadas — refaz do zero,
+  // mas mantém a posição de leitura (mesma página) em vez de voltar ao topo do livro.
+  buildBookPageList(bookPageNum);
 }
 function ensureBookLoaded(){
-  if (bookDoc) { renderBookPage(); return; }
+  if (bookDoc) { buildBookPageList(bookPageNum); return; }
   if (typeof pdfjsLib === "undefined") {
-    const canvas = document.getElementById("bookCanvas");
-    if (canvas) { const ctx = canvas.getContext("2d"); canvas.width = 300; canvas.height = 80; ctx.font = "14px sans-serif"; ctx.fillText("Não foi possível carregar o leitor. Verifique sua conexão.", 8, 40); }
+    const list = document.getElementById("bookPageList");
+    if (list) list.innerHTML = '<p style="padding:20px;color:var(--text-dim);">Não foi possível carregar o leitor. Verifique sua conexão.</p>';
     return;
   }
   pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
   pdfjsLib.getDocument("./obra-rpps.pdf").promise.then(doc => {
     bookDoc = doc;
     bookNumPages = doc.numPages;
-    renderBookPage();
+    buildBookPageList(bookPageNum);
   }).catch(err => { console.error("book load error", err); });
 }
-function renderBookPage(){
-  if (!bookDoc) return;
-  bookDoc.getPage(bookPageNum).then(page => {
-    const canvas = document.getElementById("bookCanvas");
-    if (!canvas) return;
-    const wrap = document.getElementById("bookCanvasWrap");
-    // Largura-base: ajusta a página à largura do cartão (menos padding), depois aplica o zoom do usuário.
+// Monta a lista de páginas em rolagem contínua (vertical): cada página vira um placeholder do
+// tamanho certo (evita "pulos" de layout) e só é desenhada no canvas quando entra perto da área
+// visível — sem isso, renderizar as ~centenas de páginas do livro de uma vez travaria o celular.
+function buildBookPageList(jumpToPage){
+  const list = document.getElementById("bookPageList");
+  const wrap = document.getElementById("bookScrollWrap");
+  if (!list || !bookDoc || !bookNumPages) return;
+  if (bookPageObserver) { bookPageObserver.disconnect(); bookPageObserver = null; }
+  bookRenderedPages = {};
+  bookRenderTokens = {};
+  bookDoc.getPage(1).then(firstPage => {
     const containerWidth = Math.max(240, Math.min(900, (app.clientWidth || 360) - 40));
-    const unscaled = page.getViewport({ scale: 1 });
+    const unscaled = firstPage.getViewport({ scale: 1 });
     const baseScale = containerWidth / unscaled.width;
     const cssScale = baseScale * bookZoom;
+    const pageW = Math.floor(unscaled.width * cssScale);
+    const pageH = Math.floor(unscaled.height * cssScale);
+    let html = "";
+    for (let n = 1; n <= bookNumPages; n++) {
+      html += '<div class="book-page" data-page="'+n+'" style="width:'+pageW+'px;height:'+pageH+'px;max-width:100%;margin:0 auto 10px;display:flex;align-items:center;justify-content:center;">' +
+        '<canvas data-page="'+n+'" style="display:block;max-width:100%;"></canvas>' +
+      '</div>';
+    }
+    list.innerHTML = html;
+    bookPageObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        const n = parseInt(entry.target.dataset.page, 10);
+        if (entry.isIntersecting) {
+          renderOneBookPage(n, pageW, pageH, cssScale);
+          if (entry.intersectionRatio > 0.5 && bookPageNum !== n) {
+            bookPageNum = n;
+            const ind = document.getElementById("bookPageIndicator");
+            if (ind) ind.textContent = "Página "+n+" de "+bookNumPages;
+            if (!bookSpeechActive) updateBookSpeakBtn();
+          }
+        } else {
+          // Livro tem centenas de páginas — libera a memória de páginas que ficaram bem longe da
+          // área visível (fora da margem de pré-carregamento) em vez de manter todas desenhadas.
+          unrenderBookPage(n, entry.target);
+        }
+      });
+    }, { root: wrap, rootMargin: "800px 0px", threshold: [0, 0.5] });
+    list.querySelectorAll(".book-page").forEach(el => bookPageObserver.observe(el));
+    if (jumpToPage && jumpToPage > 1) {
+      const target = list.querySelector('.book-page[data-page="'+jumpToPage+'"]');
+      if (target) target.scrollIntoView({ block: "start" });
+    }
+  });
+}
+function renderOneBookPage(n, pageW, pageH, cssScale){
+  if (bookRenderedPages[n]) return;
+  const canvas = document.querySelector('canvas[data-page="'+n+'"]');
+  if (!canvas) return;
+  bookRenderedPages[n] = true;
+  const token = (bookRenderTokens[n] = (bookRenderTokens[n] || 0) + 1);
+  bookDoc.getPage(n).then(page => {
+    if (bookRenderTokens[n] !== token) return; // zoom mudou nesse meio-tempo — descarta render obsoleto
     const viewport = page.getViewport({ scale: cssScale });
     // Renderiza na resolução real da tela (devicePixelRatio) em vez de 1 CSS-px : 1 canvas-px —
     // sem isso, o canvas fica com poucos pixels reais e é esticado via CSS, o que produz o
@@ -1979,16 +2030,22 @@ function renderBookPage(){
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     const transform = outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : null;
     page.render({ canvasContext: ctx, viewport: viewport, transform: transform });
-    // Mantém a página centralizada horizontalmente mesmo com zoom aplicado — sem isso, cada
-    // troca de página voltava o scroll pro extremo esquerdo, "puxando" o texto pra lateral.
-    if (wrap) wrap.scrollLeft = Math.max(0, (viewport.width - wrap.clientWidth) / 2);
-    const ind = document.getElementById("bookPageIndicator");
-    if (ind) ind.textContent = bookPageNum + " / " + bookNumPages;
-    const prevOv = document.getElementById("bookPrevOverlay");
-    const nextOv = document.getElementById("bookNextOverlay");
-    if (prevOv) prevOv.style.visibility = bookPageNum > 1 ? "visible" : "hidden";
-    if (nextOv) nextOv.style.visibility = (bookNumPages && bookPageNum < bookNumPages) ? "visible" : "hidden";
-  });
+  }).catch(() => { bookRenderedPages[n] = false; });
+}
+function unrenderBookPage(n, pageEl){
+  if (!bookRenderedPages[n]) return;
+  // A margem de pré-carregamento do observer (800px) já garante que isso só acontece bem longe
+  // da tela — some com o desenho do canvas (libera memória) mas mantém o placeholder do tamanho
+  // certo, então o scroll não pula quando a página sai/volta da área observada.
+  const rect = pageEl.getBoundingClientRect();
+  const wrap = document.getElementById("bookScrollWrap");
+  if (!wrap) return;
+  const wrapRect = wrap.getBoundingClientRect();
+  const farAway = rect.bottom < wrapRect.top - 1600 || rect.top > wrapRect.bottom + 1600;
+  if (!farAway) return;
+  const canvas = pageEl.querySelector("canvas");
+  if (canvas) { canvas.width = 0; canvas.height = 0; canvas.removeAttribute("style"); canvas.style.display = "block"; canvas.style.maxWidth = "100%"; }
+  bookRenderedPages[n] = false;
 }
 const MATCH_BOARD_SIZE = 5;
 const MATCH_ROUND_TYPES = ["sinonimo", "antonimo", "sinonimo", "antonimo"];
