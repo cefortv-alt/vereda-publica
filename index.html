@@ -171,7 +171,7 @@
     color: var(--gold-deep);
   }
   .hero h1 { font-size: 26px; margin: 4px 0 2px; }
-  .hero p { color: var(--text-dim); font-size: 14.5px; margin: 0; line-height: 1.45; }
+  .hero p { color: var(--text-dim); font-size: 14.5px; margin: 0; line-height: 1.45; text-align: justify; }
 
   /* ---------- Trilha switcher ---------- */
   .trilha-switch { display: flex; gap: 8px; padding: 14px 18px 0; }
@@ -203,6 +203,7 @@
   }
   .unit-banner .u-title { font-family: 'Fraunces', serif; font-weight: 600; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .unit-banner .u-sub { font-size: 12px; opacity: 0.75; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .jogos-tile .u-title, .jogos-tile .u-sub { white-space: normal; overflow: visible; text-overflow: clip; }
   .unit-banner > div { min-width: 0; flex: 1 1 auto; }
 
   .path { display: flex; flex-direction: column; align-items: center; padding: 4px 0 10px; position: relative; }
@@ -319,6 +320,9 @@
   .nav-btn img.nav-icon-img { width: 44px; height: 44px; border-radius: 10px; object-fit: cover; display: block; }
   .nav-btn.active { color: var(--ink); }
   .jogos-tile-icon img.nav-icon-img { width: 100%; height: 100%; border-radius: 8px; object-fit: cover; display: block; }
+  .jogos-tile { align-items: flex-start !important; }
+  .jogos-back-btn { background: none; border: none; display: inline-flex; align-items: center; gap: 4px; color: var(--text-dim); font-size: 14px; font-weight: 700; padding: 6px 4px; margin: -6px 0 4px -4px; cursor: pointer; }
+  .jogos-back-btn:hover { color: var(--text); }
   .nav-btn.nav-liga svg { color: var(--gold-deep); }
   .bottom-nav.ghost { opacity: 0.24; transition: opacity .2s ease; }
   .bottom-nav.ghost:hover, .bottom-nav.ghost:focus-within, .bottom-nav.ghost:active { opacity: 1; }
@@ -2162,6 +2166,7 @@ function renderSpeedScreen(){
   if (speedSession && speedSession.finished) { renderSpeedSummary(); return; }
 
   let html = renderTopbar();
+  html += '<div style="padding:10px 20px 0;"><button type="button" class="jogos-back-btn" id="backToJogosFromSpeed">← Jogos</button></div>';
   html += '<div class="hero gp-hero">' +
     '<div class="eyebrow">🏎️ Grand Prix do raciocínio 🏁</div>' +
     '<h1 class="display">GP — Corrida Intelectual 🧠</h1>' +
@@ -2175,6 +2180,7 @@ function renderSpeedScreen(){
   attachTopbarListeners();
   attachNavListeners();
   document.getElementById("startSpeedBtn").addEventListener("click", startSpeedRound);
+  document.getElementById("backToJogosFromSpeed").addEventListener("click", () => { currentScreen = "jogos"; render(); });
 }
 
 function buildMatchQueue(type, usedIds){
@@ -2454,6 +2460,7 @@ function renderForcaScreen(){
   if (forcaSession && forcaSession.done) { renderForcaSummary(); return; }
 
   let html = renderTopbar();
+  html += '<div style="padding:10px 20px 0;"><button type="button" class="jogos-back-btn" id="backToJogosFromForca">← Jogos</button></div>';
   html += '<div class="hero">' +
     '<div class="eyebrow">💰 Jogo da Forca 🪢</div>' +
     '<h1 class="display">Forca Financeira</h1>' +
@@ -2467,6 +2474,7 @@ function renderForcaScreen(){
   attachTopbarListeners();
   attachNavListeners();
   document.getElementById("startForcaBtn").addEventListener("click", startForcaGame);
+  document.getElementById("backToJogosFromForca").addEventListener("click", () => { currentScreen = "jogos"; render(); });
 }
 function renderForcaPlay(){
   const remaining = FORCA_MAX_WRONG - forcaSession.wrong;
@@ -2547,9 +2555,9 @@ function renderForcaSummary(){
 
 /* ================= JOGOS (hub) ================= */
 function jogosTile(id, screen, iconHtml, title, sub){
-  return '<button type="button" id="'+id+'" class="unit-banner" style="width:calc(100% - 36px);text-align:left;cursor:pointer;border:none;">' +
-    '<div style="display:flex;align-items:center;gap:14px;">' +
-      '<span class="jogos-tile-icon" style="width:34px;height:34px;flex:none;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:8px;">'+iconHtml+'</span>' +
+  return '<button type="button" id="'+id+'" class="unit-banner jogos-tile" style="width:calc(100% - 36px);text-align:left;cursor:pointer;border:none;height:auto;">' +
+    '<div style="display:flex;align-items:flex-start;gap:14px;">' +
+      '<span class="jogos-tile-icon" style="width:50px;height:50px;flex:none;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:10px;">'+iconHtml+'</span>' +
       '<div><div class="u-title">'+title+'</div><div class="u-sub">'+sub+'</div></div>' +
     '</div>' +
   '</button>';
@@ -2564,7 +2572,7 @@ function renderJogosScreen(){
   html += '<div style="padding:6px 0 10px;">' +
     jogosTile("tileGp", "speed", stopwatchIcon(), "GP — Corrida de sinônimos e antônimos", "Recorde: "+state.speedHighScore+" pontos") +
     jogosTile("tileForca", "forca", forcaIcon(), "Forca Financeira", state.forcaWins+" termos decifrados") +
-    jogosTile("tileCraseando", "craseando", craseandoIcon(), "Craseando no serviço público", state.craseandoPlays > 0 ? "Melhor pontuação: "+state.craseandoBest+"/20" : "Novo — teste o seu domínio da crase") +
+    jogosTile("tileCraseando", "craseando", craseandoIcon(), "Craseando no serviço público", state.craseandoPlays > 0 ? "Melhor pontuação: "+state.craseandoBest+"/20" : "Teste o seu domínio da crase") +
   '</div>';
   html += bottomNavHtml();
   app.innerHTML = html;
@@ -2610,20 +2618,21 @@ function renderCraseandoScreen(){
 }
 function renderCraseandoIntro(){
   let html = renderTopbar();
+  html += '<div style="padding:10px 20px 0;"><button type="button" class="jogos-back-btn" id="backToJogosFromCraseando">← Jogos</button></div>';
   html += '<div class="hero">' +
     '<div class="eyebrow">✏️ Craseando no serviço público</div>' +
     '<h1 class="display">Regras do uso da crase</h1>' +
     '<p>Crase é a fusão da preposição <strong>a</strong> com o artigo definido feminino <strong>a/as</strong> (sinal gráfico: <strong>à/às</strong>). Só existe crase quando, ao mesmo tempo, há exigência da preposição <em>a</em> e possibilidade de artigo definido feminino diante da palavra seguinte.</p>' +
   '</div>' +
   '<div style="padding:0 18px 4px;">' +
-    '<div class="bonus-badge" style="background:var(--paper-line);margin-bottom:10px;">' +
-      '<strong>Testes rápidos de segurança:</strong><br>' +
-      '• Troca pelo masculino: se, ao trocar por um termo masculino, aparecer "ao", há crase ("à unidade" → "ao setor").<br>' +
-      '• Antes de verbo, pronome pessoal, palavra masculina ou numeral cardinal sem artigo: normalmente não há crase.<br>' +
-      '• Locuções femininas consagradas (à disposição, à vista, às vezes, à medida que, à procura de, às pressas) têm crase.<br>' +
-      '• Horário determinado (ex.: "às 14h") tem crase; duração ou prazo futuro (ex.: "daqui a duas semanas"), não.' +
+    '<div style="background:var(--paper-card);border:1px solid var(--paper-line);border-radius:12px;padding:14px 16px;margin-bottom:10px;font-size:13.5px;line-height:1.5;text-align:justify;">' +
+      '<strong style="display:block;margin-bottom:6px;">Testes rápidos de segurança:</strong>' +
+      '<div>• Troca pelo masculino: se, ao trocar por um termo masculino, aparecer "ao", há crase ("à unidade" → "ao setor").</div>' +
+      '<div>• Antes de verbo, pronome pessoal, palavra masculina ou numeral cardinal sem artigo: normalmente não há crase.</div>' +
+      '<div>• Locuções femininas consagradas (à disposição, à vista, às vezes, à medida que, à procura de, às pressas) têm crase.</div>' +
+      '<div>• Horário determinado (ex.: "às 14h") tem crase; duração ou prazo futuro (ex.: "daqui a duas semanas"), não.</div>' +
     '</div>' +
-    '<p style="color:var(--text-dim);font-size:13.5px;">Cada rodada tem 20 questões, misturando preenchimento de lacuna, certo/errado e revisão de frases — baseadas na lista de 250 palavras do serviço público. Faixas: 0–11 em treinamento · 12–15 domínio funcional · 16–18 domínio seguro · 19–20 agente de clareza administrativa.</p>' +
+    '<p style="color:var(--text-dim);font-size:13.5px;text-align:justify;">Cada rodada tem 20 questões, misturando preenchimento de lacuna, certo/errado e revisão de frases. Faixas: 0–11 em treinamento · 12–15 domínio funcional · 16–18 domínio seguro · 19–20 agente de clareza administrativa.</p>' +
   '</div>' +
   '<div style="padding:6px 18px 18px;">' +
     '<button class="btn primary" id="startCraseandoBtn" style="width:100%;">Começar rodada</button>' +
@@ -2633,6 +2642,7 @@ function renderCraseandoIntro(){
   attachTopbarListeners();
   attachNavListeners();
   document.getElementById("startCraseandoBtn").addEventListener("click", startCraseandoRound);
+  document.getElementById("backToJogosFromCraseando").addEventListener("click", () => { currentScreen = "jogos"; render(); });
 }
 function renderCraseandoPlay(){
   const s = craseandoSession;
