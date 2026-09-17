@@ -3484,6 +3484,9 @@ function courseModulos(courseId){
   });
 }
 COURSE_CRP.modulos = courseModulos(COURSE_CRP.id);
+// Lista de cursos do Hub de "Qualificação Continuada" — hoje só o piloto CRP na Prática,
+// mas o Hub já está pronto para receber outros cursos futuros (cada um como um submenu).
+const QC_COURSES = [COURSE_CRP];
 function courseProgressFor(courseId){
   if (!state.courseProgress[courseId]) state.courseProgress[courseId] = { modulesDone: {}, moduloAttempts: {}, certIssued: false };
   return state.courseProgress[courseId];
@@ -4114,9 +4117,11 @@ function render(){
   else if (currentScreen === "simulado") renderSimuladoScreen();
   else if (currentScreen === "simuladoResultado") renderSimuladoResultado();
   else if (currentScreen === "boletim") renderBoletim();
+  else if (currentScreen === "courseHub") renderCourseHub();
   else if (currentScreen === "courseMenu") renderCourseMenu();
   else if (currentScreen === "courseUma") renderCourseUma();
   else if (currentScreen === "courseCheckpoint") renderCourseCheckpoint();
+  else if (currentScreen === "trilhaRpps") renderTrilhaRpps();
   else renderHome();
 }
 let loginGateMode = "start";
@@ -4289,9 +4294,8 @@ function renderHome(){
 
   if (state.activeTrilha === "rpps") {
     html += '<button type="button" id="openBookBtn" class="unit-banner" style="width:calc(100% - 36px);text-align:left;cursor:pointer;border:none;margin-bottom:10px;"><div><div class="u-title">📘 Leia a obra completa: Governança, Compliance e Responsabilidade Fiscal nos RPPS</div><div class="u-sub">Toque para abrir o livro</div></div></button>';
-    const ccProg = courseProgressFor(COURSE_CRP.id);
-    const ccDone = COURSE_CRP.modulos.filter(m => ccProg.modulesDone[m.numero]).length;
-    html += '<button type="button" id="openCourseBtn" class="unit-banner" style="width:calc(100% - 36px);text-align:left;cursor:pointer;border:none;margin-bottom:14px;background:var(--gold-deep);color:#fff;"><div><div class="u-title">🎓 Qualificação Continuada — '+COURSE_CRP.titulo+'</div><div class="u-sub">'+ccDone+'/'+COURSE_CRP.modulos.length+' módulos concluídos · toque para abrir</div></div></button>';
+    html += '<button type="button" id="openCourseBtn" class="unit-banner" style="width:calc(100% - 36px);text-align:left;cursor:pointer;border:none;margin-bottom:10px;background:var(--gold-deep);color:#fff;"><div><div class="u-title">🎓 Qualificação Continuada</div><div class="u-sub">Toque para abrir nosso Hub de cursos</div></div></button>';
+    html += '<button type="button" id="openTrilhaRppsBtn" class="unit-banner" style="width:calc(100% - 36px);text-align:left;cursor:pointer;border:none;margin-bottom:14px;"><div><div class="u-title">🧭 Trilha da Certificação</div><div class="u-sub">'+completedCount()+' de '+totalLessons()+' lições concluídas · toque para abrir</div></div></button>';
   }
 
   if (state.activeTrilha === "concursos") {
@@ -4306,34 +4310,36 @@ function renderHome(){
     }
   }
 
-  unitsForTrilha(state.activeTrilha).forEach((u) => {
-    const ui = UNITS.indexOf(u);
-    const doneInUnit = u.lessons.filter(l => isLessonDone(l.id)).length;
-    const unitPos = unitsForTrilha(state.activeTrilha).indexOf(u) + 1;
-    html += '<div class="unit-banner"><div><div class="u-title">'+u.icon+'  Unidade '+unitPos+' · '+u.title+'</div><div class="u-sub">'+doneInUnit+'/'+u.lessons.length+' lições</div></div></div>';
-    html += '<div class="path">';
-    u.lessons.forEach((l, li) => {
-      const done = isLessonDone(l.id);
-      const avail = isLessonAvailable(ui, li);
-      const skippable = !done && !avail && mySkips > 0;
-      const cls = done ? "done" : (avail ? "available" : (skippable ? "locked skippable" : "locked"));
-      const offset = (li % 2 === 0) ? "off-l" : "off-r";
-      const blockNum = /^Bloco\s+([\d.]+)/.exec(l.title);
-      const icon = done ? "✓" : ((!avail && !skippable) ? "🔒" : (blockNum ? blockNum[1] : (li+1)));
-      html += '<div class="node-row '+offset+'">' +
-        '<div>' +
-          '<button class="node '+cls+'" data-ui="'+ui+'" data-li="'+li+'">' +
-            icon +
-            (done ? '<span class="badge-check">★</span>' : '') +
-            (skippable ? '<span class="badge-check skip-icon">🔓</span>' : '') +
-          '</button>' +
-        '</div>' +
-      '</div>';
+  if (state.activeTrilha === "concursos") {
+    unitsForTrilha(state.activeTrilha).forEach((u) => {
+      const ui = UNITS.indexOf(u);
+      const doneInUnit = u.lessons.filter(l => isLessonDone(l.id)).length;
+      const unitPos = unitsForTrilha(state.activeTrilha).indexOf(u) + 1;
+      html += '<div class="unit-banner"><div><div class="u-title">'+u.icon+'  Unidade '+unitPos+' · '+u.title+'</div><div class="u-sub">'+doneInUnit+'/'+u.lessons.length+' lições</div></div></div>';
+      html += '<div class="path">';
+      u.lessons.forEach((l, li) => {
+        const done = isLessonDone(l.id);
+        const avail = isLessonAvailable(ui, li);
+        const skippable = !done && !avail && mySkips > 0;
+        const cls = done ? "done" : (avail ? "available" : (skippable ? "locked skippable" : "locked"));
+        const offset = (li % 2 === 0) ? "off-l" : "off-r";
+        const blockNum = /^Bloco\s+([\d.]+)/.exec(l.title);
+        const icon = done ? "✓" : ((!avail && !skippable) ? "🔒" : (blockNum ? blockNum[1] : (li+1)));
+        html += '<div class="node-row '+offset+'">' +
+          '<div>' +
+            '<button class="node '+cls+'" data-ui="'+ui+'" data-li="'+li+'">' +
+              icon +
+              (done ? '<span class="badge-check">★</span>' : '') +
+              (skippable ? '<span class="badge-check skip-icon">🔓</span>' : '') +
+            '</button>' +
+          '</div>' +
+        '</div>';
+      });
+      html += '</div>';
     });
-    html += '</div>';
-  });
+    html += '<div class="finish-stamp"><div class="t1">Continue firme</div><div class="t2">'+(TRILHAS.find(t=>t.id===state.activeTrilha)||TRILHAS[0]).finishLine+'</div></div>';
+  }
 
-  html += '<div class="finish-stamp"><div class="t1">Continue firme</div><div class="t2">'+(TRILHAS.find(t=>t.id===state.activeTrilha)||TRILHAS[0]).finishLine+'</div></div>';
   html += '<div class="footer-note">Vereda Pública · Precisa de ajuda? <a href="mailto:cefortv@gmail.com" style="color:inherit;">cefortv@gmail.com</a></div>';
   html += '<div class="footer-note" style="max-width:340px;margin:0 auto;line-height:1.5;">Aplicativo educacional independente, produzido pelo IPATE — sem vínculo com órgãos governamentais. Fontes oficiais das legislações citadas: <a href="https://www.gov.br" target="_blank" style="color:inherit;">gov.br</a> e <a href="https://www.planalto.gov.br/ccivil_03" target="_blank" style="color:inherit;">planalto.gov.br/ccivil_03</a>.</div>';
   html += bottomNavHtml();
@@ -4370,13 +4376,88 @@ function renderHome(){
   const openBookBtn = document.getElementById("openBookBtn");
   if (openBookBtn) openBookBtn.addEventListener("click", () => { currentScreen = "livro"; render(); });
   const openCourseBtn = document.getElementById("openCourseBtn");
-  if (openCourseBtn) openCourseBtn.addEventListener("click", () => { currentScreen = "courseMenu"; render(); });
+  if (openCourseBtn) openCourseBtn.addEventListener("click", () => { currentScreen = "courseHub"; render(); });
+  const openTrilhaRppsBtn = document.getElementById("openTrilhaRppsBtn");
+  if (openTrilhaRppsBtn) openTrilhaRppsBtn.addEventListener("click", () => { currentScreen = "trilhaRpps"; render(); });
   const simuladoResumeBtn = document.getElementById("simuladoResumeBtn");
   if (simuladoResumeBtn) simuladoResumeBtn.addEventListener("click", () => { currentScreen = "simulado"; render(); });
   const simuladoStartCardBtn = document.getElementById("simuladoStartCardBtn");
   if (simuladoStartCardBtn) simuladoStartCardBtn.addEventListener("click", () => { if (simuladosAvailable() > 0) { currentScreen = "simuladoConfirm"; render(); } });
   attachTopbarListeners();
   attachTrilhaSwitcherListeners();
+  attachNavListeners();
+}
+
+/* ================= RENDER: TRILHA DA CERTIFICAÇÃO (RPPS) =================
+   Sub-tela dedicada às unidades/lições do RPPS, separada do menu principal a pedido do
+   Thiago (17/09/2026) para não poluir visualmente o menu RPPS — que agora mostra três
+   entradas: Livro, Qualificação Continuada e Trilha da Certificação. */
+function renderTrilhaRpps(){
+  ensureHeartsCurrent(); saveState();
+  const mySkips = skipsAvailable();
+  let html = renderTopbar();
+  html += '<div class="hero">' +
+    '<div class="eyebrow">Trilha da Certificação · RPPS</div>' +
+    '<h1 class="display">RPPS — Regime Próprio de Previdência Social</h1>' +
+    '<p>'+completedCount("rpps")+' de '+totalLessons("rpps")+' lições concluídas</p>' +
+    (hasTrilhaMedal("rpps") ? '<div class="bonus-badge">🏅 Trilha concluída — modo revisão ativo, continue ganhando XP!</div>' : '') +
+    (mySkips > 0 ? '<div class="bonus-badge skip-badge">🔓 Você tem '+mySkips+' pulo'+(mySkips===1?'':'s')+' — toque em qualquer bloco trancado para acessá-lo direto</div>' : '') +
+  '</div>';
+
+  unitsForTrilha("rpps").forEach((u) => {
+    const ui = UNITS.indexOf(u);
+    const doneInUnit = u.lessons.filter(l => isLessonDone(l.id)).length;
+    const unitPos = unitsForTrilha("rpps").indexOf(u) + 1;
+    html += '<div class="unit-banner"><div><div class="u-title">'+u.icon+'  Unidade '+unitPos+' · '+u.title+'</div><div class="u-sub">'+doneInUnit+'/'+u.lessons.length+' lições</div></div></div>';
+    html += '<div class="path">';
+    u.lessons.forEach((l, li) => {
+      const done = isLessonDone(l.id);
+      const avail = isLessonAvailable(ui, li);
+      const skippable = !done && !avail && mySkips > 0;
+      const cls = done ? "done" : (avail ? "available" : (skippable ? "locked skippable" : "locked"));
+      const offset = (li % 2 === 0) ? "off-l" : "off-r";
+      const blockNum = /^Bloco\s+([\d.]+)/.exec(l.title);
+      const icon = done ? "✓" : ((!avail && !skippable) ? "🔒" : (blockNum ? blockNum[1] : (li+1)));
+      html += '<div class="node-row '+offset+'">' +
+        '<div>' +
+          '<button class="node '+cls+'" data-ui="'+ui+'" data-li="'+li+'">' +
+            icon +
+            (done ? '<span class="badge-check">★</span>' : '') +
+            (skippable ? '<span class="badge-check skip-icon">🔓</span>' : '') +
+          '</button>' +
+        '</div>' +
+      '</div>';
+    });
+    html += '</div>';
+  });
+
+  html += '<div class="finish-stamp"><div class="t1">Continue firme</div><div class="t2">'+TRILHAS.find(t=>t.id==="rpps").finishLine+'</div></div>';
+  html += '<div class="footer-note">Vereda Pública · Precisa de ajuda? <a href="mailto:cefortv@gmail.com" style="color:inherit;">cefortv@gmail.com</a></div>';
+  html += bottomNavHtml();
+
+  app.innerHTML = html;
+
+  app.querySelectorAll(".node.available, .node.done").forEach(btn => {
+    btn.addEventListener("click", () => startLesson(parseInt(btn.dataset.ui,10), parseInt(btn.dataset.li,10)));
+  });
+  app.querySelectorAll(".node.skippable").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const ui = parseInt(btn.dataset.ui,10), li = parseInt(btn.dataset.li,10);
+      ensureHeartsCurrent();
+      if (state.hearts <= 0) { showToast("Você está sem vidas — espere elas recarregarem (ou compre mais) antes de usar um pulo."); renderHeartsWaiting(); return; }
+      const ok = (typeof window !== "undefined" && window.confirm)
+        ? window.confirm("Usar 1 pulo (você tem "+skipsAvailable()+") para acessar este bloco agora, fora da ordem?")
+        : true;
+      if (ok && useSkip()) startLesson(ui, li);
+      else render();
+    });
+  });
+  app.querySelectorAll(".node.locked:not(.skippable)").forEach(btn => {
+    btn.addEventListener("click", () => {
+      showToast("Complete todos os blocos acima para desbloquear esse aqui ou use um dos seus pulos.");
+    });
+  });
+  attachTopbarListeners();
   attachNavListeners();
 }
 
@@ -5499,11 +5580,42 @@ function courseAllModulesDone(courseId){
   return cfg.modulos.every(m => prog.modulesDone[m.numero]);
 }
 
+function renderCourseHub(){
+  let html = renderTopbar();
+  html += '<div class="hero">' +
+    '<div class="eyebrow" style="display:flex;align-items:center;justify-content:space-between;gap:10px;">Qualificação Continuada<button type="button" id="courseHubBackBtn" style="border:1px solid var(--paper-line);background:var(--paper-card);color:var(--text-dim);border-radius:8px;padding:2px 9px;font-size:11px;cursor:pointer;">← Voltar</button></div>' +
+    '<h1 class="display">Hub de cursos</h1>' +
+    '<p>Cursos curtos e gamificados para somar pontos de capacitação. Escolha um curso abaixo para começar.</p>' +
+  '</div>';
+
+  html += '<div class="path" style="max-width:520px;">';
+  QC_COURSES.forEach(c => {
+    const prog = courseProgressFor(c.id);
+    const done = c.modulos.filter(m => prog.modulesDone[m.numero]).length;
+    html += '<button type="button" class="unit-banner course-hub-card" data-course="'+c.id+'" style="width:calc(100% - 36px);text-align:left;cursor:pointer;border:none;">' +
+      '<div><div class="u-title">🎓 '+c.titulo+'</div>' +
+      '<div class="u-sub">'+done+'/'+c.modulos.length+' módulos concluídos · toque para abrir</div></div>' +
+    '</button>';
+  });
+  html += '</div>';
+
+  html += bottomNavHtml();
+
+  app.innerHTML = html;
+  attachTopbarListeners();
+  attachNavListeners();
+  const backBtn = document.getElementById("courseHubBackBtn");
+  if (backBtn) backBtn.addEventListener("click", () => { currentScreen = "home"; render(); });
+  app.querySelectorAll(".course-hub-card").forEach(card => {
+    card.addEventListener("click", () => { currentScreen = "courseMenu"; render(); });
+  });
+}
+
 function renderCourseMenu(){
   const prog = courseProgressFor(COURSE_CRP.id);
   let html = renderTopbar();
   html += '<div class="hero">' +
-    '<div class="eyebrow">Qualificação Continuada</div>' +
+    '<div class="eyebrow" style="display:flex;align-items:center;justify-content:space-between;gap:10px;">Qualificação Continuada<button type="button" id="courseMenuBackBtn" style="border:1px solid var(--paper-line);background:var(--paper-card);color:var(--text-dim);border-radius:8px;padding:2px 9px;font-size:11px;cursor:pointer;">← Voltar</button></div>' +
     '<h1 class="display">'+COURSE_CRP.titulo+'</h1>' +
     '<p>Curso curto e gamificado, dividido em '+COURSE_CRP.modulos.length+' módulos. Cada módulo termina em um checkpoint (mínimo de 70% de acertos) — se não passar, você pode refazer o módulo livremente, sem pressa.</p>' +
   '</div>';
@@ -5526,12 +5638,13 @@ function renderCourseMenu(){
     '</div>';
   }
 
-  html += '<div class="footer-note">Curso piloto — conteúdo baseado na apostila oficial de capacitação, revisado com checagem de zero tolerância a erro.</div>';
   html += bottomNavHtml();
 
   app.innerHTML = html;
   attachTopbarListeners();
   attachNavListeners();
+  const backBtn = document.getElementById("courseMenuBackBtn");
+  if (backBtn) backBtn.addEventListener("click", () => { currentScreen = "courseHub"; render(); });
   app.querySelectorAll(".course-mod-card").forEach(card => {
     const n = parseInt(card.dataset.mod, 10);
     if (!courseModuloAvailable(n)) { card.addEventListener("click", () => showToast("Conclua o módulo anterior (checkpoint com 70% ou mais) para desbloquear este.")); return; }
@@ -5729,7 +5842,7 @@ function renderCourseCheckpoint(){
   '</div>';
   html += '<div style="padding:0 20px;display:flex;flex-direction:column;gap:10px;">';
   if (!r.passed) html += '<button class="btn primary" id="courseRetryBtn" style="width:100%;">Refazer o módulo</button>';
-  html += '<button class="btn ghost" id="courseBackToMenuBtn" style="width:100%;">Voltar à Qualificação Continuada</button>';
+  html += '<button class="btn ghost" id="courseBackToMenuBtn" style="width:100%;">Voltar aos módulos do curso</button>';
   html += '</div>';
   html += bottomNavHtml();
   app.innerHTML = html;
