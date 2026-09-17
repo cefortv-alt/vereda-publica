@@ -4397,7 +4397,7 @@ function renderTrilhaRpps(){
   const mySkips = skipsAvailable();
   let html = renderTopbar();
   html += '<div class="hero">' +
-    '<div class="eyebrow">Trilha da Certificação · RPPS</div>' +
+    '<div class="eyebrow" style="display:flex;align-items:center;justify-content:space-between;gap:10px;">Trilha da Certificação · RPPS<button type="button" id="trilhaRppsBackBtn" style="border:1px solid var(--paper-line);background:var(--paper-card);color:var(--text-dim);border-radius:8px;padding:2px 9px;font-size:11px;cursor:pointer;">← Voltar</button></div>' +
     '<h1 class="display">RPPS — Regime Próprio de Previdência Social</h1>' +
     '<p>'+completedCount("rpps")+' de '+totalLessons("rpps")+' lições concluídas</p>' +
     (hasTrilhaMedal("rpps") ? '<div class="bonus-badge">🏅 Trilha concluída — modo revisão ativo, continue ganhando XP!</div>' : '') +
@@ -4457,6 +4457,8 @@ function renderTrilhaRpps(){
       showToast("Complete todos os blocos acima para desbloquear esse aqui ou use um dos seus pulos.");
     });
   });
+  const trilhaRppsBackBtn = document.getElementById("trilhaRppsBackBtn");
+  if (trilhaRppsBackBtn) trilhaRppsBackBtn.addEventListener("click", () => { currentScreen = "home"; render(); });
   attachTopbarListeners();
   attachNavListeners();
 }
@@ -5588,11 +5590,11 @@ function renderCourseHub(){
     '<p>Cursos curtos e gamificados para somar pontos de capacitação. Escolha um curso abaixo para começar.</p>' +
   '</div>';
 
-  html += '<div class="path" style="max-width:520px;">';
+  html += '<div style="padding:0 18px;display:flex;flex-direction:column;gap:10px;">';
   QC_COURSES.forEach(c => {
     const prog = courseProgressFor(c.id);
     const done = c.modulos.filter(m => prog.modulesDone[m.numero]).length;
-    html += '<button type="button" class="unit-banner course-hub-card" data-course="'+c.id+'" style="width:calc(100% - 36px);text-align:left;cursor:pointer;border:none;">' +
+    html += '<button type="button" class="unit-banner course-hub-card" data-course="'+c.id+'" style="width:100%;text-align:left;cursor:pointer;border:none;">' +
       '<div><div class="u-title">🎓 '+c.titulo+'</div>' +
       '<div class="u-sub">'+done+'/'+c.modulos.length+' módulos concluídos · toque para abrir</div></div>' +
     '</button>';
@@ -5620,12 +5622,12 @@ function renderCourseMenu(){
     '<p>Curso curto e gamificado, dividido em '+COURSE_CRP.modulos.length+' módulos. Cada módulo termina em um checkpoint (mínimo de 70% de acertos) — se não passar, você pode refazer o módulo livremente, sem pressa.</p>' +
   '</div>';
 
-  html += '<div class="path" style="max-width:520px;">';
+  html += '<div style="padding:0 18px;display:flex;flex-direction:column;gap:10px;">';
   COURSE_CRP.modulos.forEach(m => {
     const done = !!prog.modulesDone[m.numero];
     const avail = courseModuloAvailable(m.numero);
     const cls = done ? "done" : (avail ? "available" : "locked");
-    html += '<div class="unit-banner course-mod-card" data-mod="'+m.numero+'" style="cursor:'+(avail?'pointer':'default')+';'+(avail?'':'opacity:0.6;')+'">' +
+    html += '<div class="unit-banner course-mod-card" data-mod="'+m.numero+'" style="width:100%;box-sizing:border-box;cursor:'+(avail?'pointer':'default')+';'+(avail?'':'opacity:0.6;')+'">' +
       '<div><div class="u-title">'+(done?'✓ ':(avail?'':'🔒 '))+m.titulo+'</div>' +
       '<div class="u-sub" style="white-space:normal;">'+m.umas.length+' unidades · '+m.preview+(done?' · concluído':(avail?'':' · conclua o módulo anterior'))+'</div></div>' +
     '</div>';
