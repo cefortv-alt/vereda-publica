@@ -3526,8 +3526,8 @@ function courseProgressFor(courseId){
 
 /* ================= ESTADO ================= */
 const STORE_KEY = "vereda-publica-progresso-v2";
-const MAX_HEARTS = 10;
-const HEARTS_COOLDOWN_MS = 30 * 60 * 1000;
+const MAX_HEARTS = 15;
+const HEARTS_COOLDOWN_MS = 15 * 60 * 1000;
 
 // Chave de armazenamento local em uso nesta sessão. Enquanto não sabemos se há uma conta logada
 // (ou quando não há — modo visitante), usamos a chave genérica STORE_KEY. Assim que uma conta é
@@ -4044,6 +4044,113 @@ function requestXpPurchase(pkg){
   }
 }
 
+/* ================= ADMIN: CONFIRMAÇÃO DE PIX EM 1 CLIQUE =================
+   Semi-automação pedida por Thiago (09-21): continua sem gateway de pagamento novo (o Pix
+   é manual, por fora do app), mas em vez de editar linha por linha no Table Editor do
+   Supabase, esta tela lista os pedidos "pendente" de xp_purchases e credita XP/vidas com um
+   clique. Só visível para a conta dele (ADMIN_EMAIL) — alunos comuns nunca veem/alcançam esta
+   tela. Pacotes "ilimitado"/combo (xp ou lives === null) não têm infraestrutura de expiração
+   ainda, então aqui só marcamos como confirmado e avisamos para aplicar manualmente — evita
+   inventar uma coluna/lógica de validade que não existe no banco. */
+const ADMIN_EMAIL = "cefortv@gmail.com";
+let adminPixOrders = null;
+let adminPixLoading = false;
+let adminPixError = null;
+let adminPixBusyId = null;
+let adminPixMsg = null;
+function loadAdminPixOrders(){
+  if (!sb || !cloudUser || cloudUser.email !== ADMIN_EMAIL) return;
+  adminPixLoading = true; adminPixError = null;
+  sb.from("xp_purchases").select("*").eq("status", "pendente").order("created_at", { ascending: true })
+    .then(({ data, error }) => {
+      adminPixLoading = false;
+      if (error) { adminPixError = error.message; } else { adminPixOrders = data || []; }
+      render();
+    });
+}
+function confirmAdminPixOrder(order){
+  if (!sb || adminPixBusyId) return;
+  adminPixBusyId = order.id;
+  render();
+  const pkg = ALL_PACKAGES.find(p => p.id === order.package_id);
+  const isUnlimited = !pkg || pkg.xp === null || pkg.lives === null;
+  const finish = (msg) => {
+    adminPixBusyId = null;
+    adminPixMsg = msg;
+    adminPixOrders = (adminPixOrders || []).filter(o => o.id !== order.id);
+    render();
+  };
+  const markConfirmed = () => {
+    sb.from("xp_purchases").update({ status: "confirmado" }).eq("id", order.id).then(({ error }) => {
+      if (error) { adminPixBusyId = null; adminPixMsg = "Erro ao confirmar pedido: " + error.message; render(); return; }
+      finish(isUnlimited
+        ? "Pedido de " + order.user_email + " marcado como confirmado. Este pacote é ilimitado/combo — credite manualmente no Supabase, não há automação para isso ainda."
+        : "Pedido confirmado e creditado para " + order.user_email + ".");
+    });
+  };
+  if (isUnlimited || !pkg) { markConfirmed(); return; }
+  sb.from("profiles").select("xp,hearts").eq("id", order.user_id).maybeSingle().then(({ data: profile, error }) => {
+    if (error || !profile) {
+      adminPixBusyId = null;
+      adminPixMsg = "Não encontrei o perfil de " + order.user_email + " para creditar automaticamente. Confirme manualmente no Supabase.";
+      render();
+      return;
+    }
+    const updates = {};
+    if (pkg.xp) updates.xp = (profile.xp || 0) + pkg.xp;
+    if (pkg.lives) updates.hearts = (profile.hearts || 0) + pkg.lives;
+    if (Object.keys(updates).length === 0) { markConfirmed(); return; }
+    sb.from("profiles").update(updates).eq("id", order.user_id).then(({ error: updErr }) => {
+      if (updErr) { adminPixBusyId = null; adminPixMsg = "Erro ao creditar: " + updErr.message; render(); return; }
+      markConfirmed();
+    });
+  });
+}
+function renderAdminPixScreen(){
+  if (!cloudUser || cloudUser.email !== ADMIN_EMAIL) { currentScreen = "home"; render(); return; }
+  if (adminPixOrders === null && !adminPixLoading) loadAdminPixOrders();
+
+  let html = renderTopbar();
+  html += '<div class="hero">' +
+    '<div class="eyebrow">🔧 Admin</div>' +
+    '<h1 class="display">Pedidos Pix pendentes</h1>' +
+    '<p>Confira o recebimento no seu extrato Pix antes de confirmar — o clique credita XP/vidas automaticamente na conta do aluno (pacotes ilimitados/combo precisam de ajuste manual à parte).</p>' +
+  '</div>';
+
+  if (adminPixMsg) html += '<div style="padding:0 20px 12px;"><div class="bonus-badge skip-badge">'+adminPixMsg+'</div></div>';
+
+  if (adminPixLoading) {
+    html += '<div style="padding:0 20px;"><p>Carregando pedidos…</p></div>';
+  } else if (adminPixError) {
+    html += '<div style="padding:0 20px;"><p>Erro ao carregar: '+adminPixError+'</p></div>';
+  } else if (!adminPixOrders || !adminPixOrders.length) {
+    html += '<div style="padding:0 20px;"><p>Nenhum pedido pendente agora.</p></div>';
+  } else {
+    html += '<div class="podcast-list" style="margin:0 18px 16px;">';
+    adminPixOrders.forEach(o => {
+      const busy = adminPixBusyId === o.id;
+      html += '<div class="podcast-card"><div class="pc-body">' +
+        '<div class="pc-title">'+(o.user_name || o.user_email || "Aluno")+'</div>' +
+        '<div class="pc-desc">'+(o.user_email||'')+'<br>'+o.package_label+' — '+o.price+'</div>' +
+        '<button class="btn primary" data-confirm-order="'+o.id+'" style="margin-top:8px;" '+(busy?'disabled':'')+'>'+(busy?'Confirmando…':'Confirmar recebimento')+'</button>' +
+      '</div></div>';
+    });
+    html += '</div>';
+  }
+  html += '<div style="padding:0 20px 20px;"><button class="btn" id="adminPixBackBtn">Voltar</button></div>';
+
+  app.innerHTML = html;
+  attachTopbarListeners();
+  document.querySelectorAll("[data-confirm-order]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const order = (adminPixOrders || []).find(o => String(o.id) === btn.dataset.confirmOrder);
+      if (order) confirmAdminPixOrder(order);
+    });
+  });
+  const backBtn = document.getElementById("adminPixBackBtn");
+  if (backBtn) backBtn.addEventListener("click", () => { adminPixMsg = null; currentScreen = "xpstore"; render(); });
+}
+
 /* ================= ÍCONES ================= */
 const app = document.getElementById("app");
 function heartsIcon(filled){ return '<svg viewBox="0 0 24 24" fill="'+(filled?'currentColor':'none')+'" stroke="currentColor" stroke-width="2"><path d="M12 21s-7.5-4.6-10-9.3C.5 8.4 2.4 5 6 5c2 0 3.4 1.1 4 2.2C10.6 6.1 12 5 14 5c3.6 0 5.5 3.4 4 6.7C19.5 16.4 12 21 12 21z"/></svg>'; }
@@ -4185,6 +4292,7 @@ function render(){
   else if (currentScreen === "courseCheckpoint") renderCourseCheckpoint();
   else if (currentScreen === "trilhaRpps") renderTrilhaRpps();
   else if (currentScreen === "errorNotebook") renderErrorNotebookScreen();
+  else if (currentScreen === "adminPix") renderAdminPixScreen();
   else renderHome();
 }
 let loginGateMode = "start";
@@ -4346,7 +4454,7 @@ function renderHome(){
     html += '<div class="promo-banner demo" id="heartsBanner" style="cursor:pointer;">' +
       '<div class="pb-icon">💤</div>' +
       '<div><div class="pb-title">Sem energia — toque para ver o tempo restante</div>' +
-      '<div class="pb-sub">Suas vidas voltam automaticamente em até 30 minutos</div></div>' +
+      '<div class="pb-sub">Suas vidas voltam automaticamente em até 15 minutos</div></div>' +
     '</div>';
   }
 
@@ -4783,6 +4891,10 @@ function renderXpStoreScreen(){
     '<p>Além dos '+SKIP_CREDITS_PER_STEP+' pulos gratuitos que você ganha a cada '+SKIP_XP_STEP+' XP conquistados, você pode comprar XP extra ou vidas extras via Pix.</p>' +
   '</div>';
 
+  if (cloudUser && cloudUser.email === ADMIN_EMAIL) {
+    html += '<div style="padding:0 20px 8px;"><button class="btn" id="adminPixLinkBtn">🔧 Pedidos Pix pendentes (admin)</button></div>';
+  }
+
   if (!cloudUser) {
     html += '<div style="padding:0 20px 20px;"><p>Entre com sua conta Google para comprar XP ou vidas — o pedido fica vinculado à sua conta.</p></div>';
   } else if (xpStoreRequestSent) {
@@ -4842,6 +4954,8 @@ function renderXpStoreScreen(){
     if (pkg) requestXpPurchase(pkg);
     render();
   });
+  const adminPixLinkBtn = document.getElementById("adminPixLinkBtn");
+  if (adminPixLinkBtn) adminPixLinkBtn.addEventListener("click", () => { adminPixOrders = null; adminPixMsg = null; currentScreen = "adminPix"; render(); });
 }
 // ================= LEITURA DO LIVRO (e-book em HTML, v29.4) =================
 // Até a v29.3 o livro era o PDF impresso renderizado como imagem (pdf.js desenhando cada página
