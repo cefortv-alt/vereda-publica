@@ -3562,6 +3562,7 @@ function normalizeState(s){
   if (s.craseandoPlays === undefined) s.craseandoPlays = 0;
   if (!s.courseProgress) s.courseProgress = {};
   if (!Array.isArray(s.errorNotebook)) s.errorNotebook = [];
+  if (s.userGoal === undefined) s.userGoal = null;
   return s;
 }
 // Lê e normaliza o estado salvo sob uma chave específica do localStorage (genérica, de visitante,
@@ -3707,15 +3708,29 @@ function useSkip(){
 const EXAM_XP_STEP = 1000;
 const EXAM_TIME_LIMIT_MS = 2 * 60 * 60 * 1000;
 const EXAM_RANDOM_COUNT = 15;
-const EXAM_SUBJECTS = [
-  { unitId: "c01", label: "Língua Portuguesa", count: 8 },
-  { unitId: "c02", label: "Raciocínio Lógico e Matemática", count: 4 },
-  { unitId: "c03", label: "Informática e Tecnologia da Informação (TI)", count: 4 },
-  { unitId: "c04", label: "Atualidades e Conhecimentos Gerais", count: 2 },
-  { unitId: "c06", label: "Direito Constitucional", count: 4 },
-  { unitId: "c05", label: "Direito Administrativo", count: 3 }
-];
-const EXAM_TOTAL_QUESTIONS = EXAM_SUBJECTS.reduce((s,x)=>s+x.count,0) + EXAM_RANDOM_COUNT;
+const EXAM_SUBJECTS_BY_TRILHA = {
+  concursos: [
+    { unitId: "c01", label: "Língua Portuguesa", count: 8 },
+    { unitId: "c02", label: "Raciocínio Lógico e Matemática", count: 4 },
+    { unitId: "c03", label: "Informática e Tecnologia da Informação (TI)", count: 4 },
+    { unitId: "c04", label: "Atualidades e Conhecimentos Gerais", count: 2 },
+    { unitId: "c06", label: "Direito Constitucional", count: 4 },
+    { unitId: "c05", label: "Direito Administrativo", count: 3 }
+  ],
+  // RPPS (adicionado 21/09 — item 4 da fila de melhorias): mesma proporção fixos+aleatório
+  // (25 + 15 = 40), com peso maior nas disciplinas mais extensas do banco RPPS.
+  rpps: [
+    { unitId: "rpps01", label: "Administração Pública, Gestão de Pessoas e Planejamento Governamental", count: 8 },
+    { unitId: "rpps08", label: "Gestão Contábil e Orçamentária dos RPPS", count: 4 },
+    { unitId: "rpps11", label: "Certificação Institucional, Governança e Sistema de Controle dos RPPS", count: 4 },
+    { unitId: "rpps04", label: "Gestão Atuarial e Sustentabilidade dos RPPS", count: 3 },
+    { unitId: "rpps03", label: "Sistema Financeiro, Economia e Matemática Financeira Aplicada", count: 3 },
+    { unitId: "rpps06", label: "Benefícios, Limites e Comprovação de Direitos no RPPS", count: 3 }
+  ]
+};
+function examSubjectsFor(trilha){ return EXAM_SUBJECTS_BY_TRILHA[trilha] || EXAM_SUBJECTS_BY_TRILHA.concursos; }
+function examTotalQuestions(trilha){ return examSubjectsFor(trilha).reduce((s,x)=>s+x.count,0) + EXAM_RANDOM_COUNT; }
+const EXAM_TOTAL_QUESTIONS = examTotalQuestions("concursos"); // mantido p/ compatibilidade (mesmo total nas duas trilhas)
 let simuladoSession = null;
 let simuladoTimerId = null;
 
@@ -3735,15 +3750,15 @@ function questionsOfUnit(unitId){
   u.lessons.forEach(l => l.pool.forEach(q => out.push(q)));
   return out;
 }
-function allConcursoQuestions(){
+function allTrilhaQuestions(trilha){
   const out = [];
-  UNITS.filter(u => u.trilha === "concursos").forEach(u => u.lessons.forEach(l => l.pool.forEach(q => out.push(q))));
+  UNITS.filter(u => u.trilha === trilha).forEach(u => u.lessons.forEach(l => l.pool.forEach(q => out.push(q))));
   return out;
 }
-function buildSimulado(){
+function buildSimulado(trilha){
   const used = new Set();
   let selected = [];
-  EXAM_SUBJECTS.forEach(subj => {
+  examSubjectsFor(trilha).forEach(subj => {
     const pool = shuffleArr(questionsOfUnit(subj.unitId));
     let picked = 0;
     for (const q of pool) {
@@ -3752,7 +3767,7 @@ function buildSimulado(){
       used.add(q); selected.push(q); picked++;
     }
   });
-  const randomPool = shuffleArr(allConcursoQuestions());
+  const randomPool = shuffleArr(allTrilhaQuestions(trilha));
   let pickedRandom = 0;
   for (const q of randomPool) {
     if (pickedRandom >= EXAM_RANDOM_COUNT) break;
@@ -3774,10 +3789,12 @@ function fmtCountdownHMS(ms){
 }
 function startSimulado(){
   if (simuladosAvailable() <= 0) return;
-  const questions = buildSimulado();
+  const trilha = state.activeTrilha;
+  const questions = buildSimulado(trilha);
   state.simuladosGerados = (state.simuladosGerados || 0) + 1;
   saveState();
   simuladoSession = {
+    trilha: trilha,
     questions,
     index: 0,
     answers: new Array(questions.length).fill(null),
@@ -3807,11 +3824,14 @@ function finishSimulado(){
   render();
 }
 function renderSimuladoConfirm(){
+  const trilha = state.activeTrilha;
+  const trilhaLabel = (TRILHAS.find(t => t.id === trilha) || TRILHAS[0]).label;
+  const subjLabels = examSubjectsFor(trilha).map(s => s.label).join(", ");
   let html = renderTopbar();
   html += '<div class="hero">' +
     '<div class="eyebrow">📝 Simule sua prova</div>' +
     '<h1 class="display">Pronto para o simulado?</h1>' +
-    '<p>'+EXAM_TOTAL_QUESTIONS+' questões sorteadas da trilha Concursos Públicos (Português, Raciocínio Lógico, Informática, Atualidades, Constitucional, Administrativo e um bloco aleatório de reforço), com 2 horas cronometradas — assim que o tempo esgotar, o simulado é enviado automaticamente com o que estiver respondido até então.</p>' +
+    '<p>'+examTotalQuestions(trilha)+' questões sorteadas da trilha '+trilhaLabel+' ('+subjLabels+' e um bloco aleatório de reforço), com 2 horas cronometradas — assim que o tempo esgotar, o simulado é enviado automaticamente com o que estiver respondido até então.</p>' +
     '<div class="bonus-badge" style="background:var(--paper-line);">⚠️ Atenção: uma vez iniciado, o cronômetro não para nem pausa. Só comece quando tiver as 2 horas disponíveis (ou tempo suficiente para o que pretende responder).</div>' +
   '</div>' +
   '<div style="padding:0 18px 18px;display:flex;gap:10px;flex-wrap:wrap;">' +
@@ -4128,8 +4148,11 @@ function render(){
     if (bookSpeechActive) stopBookSpeech();
     if (bookSectionObserver) { bookSectionObserver.disconnect(); bookSectionObserver = null; }
   }
-  if (sb && !cloudUser) { renderLoginGate(); return; }
-  if (!state.onboardingSeen && currentScreen !== "onboarding" && !session) { currentScreen = "onboarding"; }
+  if (sb && !cloudUser && !(session && session.isDemo)) { renderLoginGate(); return; }
+  if (!state.onboardingSeen && currentScreen !== "onboarding" && currentScreen !== "onboardingGoal" && !session) {
+    currentScreen = state.userGoal ? "onboarding" : "onboardingGoal";
+  }
+  if (currentScreen === "onboardingGoal") { renderOnboardingGoalScreen(); return; }
   if (currentScreen === "onboarding") { renderOnboardingScreen(); return; }
   if (session) { renderLesson(); return; }
   if (currentScreen === "league") renderLeagueScreen();
@@ -4222,6 +4245,7 @@ function renderLoginGate(){
         '<li><span class="ico">🎓</span><span>Curso gamificado de Qualificação Continuada, com certificado ao final, dentro da trilha RPPS.</span></li>' +
         '<li><span class="ico">🏆</span><span>XP, sequência de dias de estudo e liga semanal entre usuários para manter a constância.</span></li>' +
       '</ul>' +
+      '<button type="button" id="lgDemoBtn" class="btn" style="width:100%;margin-top:6px;">🎯 Experimente uma amostra grátis (sem cadastro)</button>' +
     '</div>' +
     inner +
     '<div class="footer-note" style="max-width:340px;margin:0 auto;line-height:1.5;">O Vereda Pública é um aplicativo educacional independente, produzido pelo IPATE (Instituto de Pesquisas Avançadas em Tecnologia e Educação), entidade privada. <strong>Não possui vínculo, afiliação ou representação oficial com nenhum órgão ou entidade governamental.</strong> As leis e normativos citados nas questões têm caráter informativo/didático; consulte as fontes oficiais em <a href="https://www.gov.br" target="_blank" style="color:inherit;">gov.br</a> e <a href="https://www.planalto.gov.br/ccivil_03" target="_blank" style="color:inherit;">planalto.gov.br/ccivil_03</a>.</div>' +
@@ -4231,6 +4255,8 @@ function renderLoginGate(){
   const goto = (mode) => { loginGateMode = mode; loginGateMsg = null; render(); };
   const btn = document.getElementById("lgLoginBtn");
   if (btn) btn.addEventListener("click", signInWithGoogle);
+  const demoBtn = document.getElementById("lgDemoBtn");
+  if (demoBtn) demoBtn.addEventListener("click", startDemoLesson);
   const emailBtn = document.getElementById("lgEmailBtn");
   if (emailBtn) emailBtn.addEventListener("click", () => goto("email-login"));
   const back = document.getElementById("lgBack");
@@ -4336,16 +4362,14 @@ function renderHome(){
     html += '<button type="button" id="openTrilhaRppsBtn" class="unit-banner" style="width:calc(100% - 36px);text-align:left;cursor:pointer;border:none;margin-bottom:14px;"><div><div class="u-title">🧭 Trilha da Certificação</div><div class="u-sub">'+completedCount()+' de '+totalLessons()+' lições concluídas · toque para abrir</div></div></button>';
   }
 
-  if (state.activeTrilha === "concursos") {
-    if (simuladoSession && !simuladoSession.finished) {
-      html += '<button type="button" id="simuladoResumeBtn" class="unit-banner" style="width:calc(100% - 36px);text-align:left;cursor:pointer;border:none;margin-bottom:14px;background:var(--gold-deep);color:#fff;">' +
-        '<div><div class="u-title">📝 Simulado em andamento — questão '+(simuladoSession.index+1)+' de '+simuladoSession.questions.length+'</div><div class="u-sub">Toque para continuar (o cronômetro não parou)</div></div></button>';
-    } else {
-      const disponiveis = simuladosAvailable();
-      html += '<button type="button" id="simuladoStartCardBtn" class="unit-banner" style="width:calc(100% - 36px);text-align:left;cursor:'+(disponiveis>0?'pointer':'default')+';border:none;margin-bottom:14px;"'+(disponiveis>0?'':' disabled')+'>' +
-        '<div><div class="u-title">📝 Simule sua prova</div>' +
-        '<div class="u-sub">'+(disponiveis>0 ? disponiveis+' simulado'+(disponiveis===1?'':'s')+' disponível ('+EXAM_TOTAL_QUESTIONS+' questões, 2h) — toque para iniciar' : 'Faltam '+xpParaProximoSimulado()+' XP para liberar o próximo simulado')+'</div></div></button>';
-    }
+  if (simuladoSession && !simuladoSession.finished && simuladoSession.trilha === state.activeTrilha) {
+    html += '<button type="button" id="simuladoResumeBtn" class="unit-banner" style="width:calc(100% - 36px);text-align:left;cursor:pointer;border:none;margin-bottom:14px;background:var(--gold-deep);color:#fff;">' +
+      '<div><div class="u-title">📝 Simulado em andamento — questão '+(simuladoSession.index+1)+' de '+simuladoSession.questions.length+'</div><div class="u-sub">Toque para continuar (o cronômetro não parou)</div></div></button>';
+  } else {
+    const disponiveis = simuladosAvailable();
+    html += '<button type="button" id="simuladoStartCardBtn" class="unit-banner" style="width:calc(100% - 36px);text-align:left;cursor:'+(disponiveis>0?'pointer':'default')+';border:none;margin-bottom:14px;"'+(disponiveis>0?'':' disabled')+'>' +
+      '<div><div class="u-title">📝 Simule sua prova</div>' +
+      '<div class="u-sub">'+(disponiveis>0 ? disponiveis+' simulado'+(disponiveis===1?'':'s')+' disponível ('+examTotalQuestions(state.activeTrilha)+' questões, 2h) — toque para iniciar' : 'Faltam '+xpParaProximoSimulado()+' XP para liberar o próximo simulado')+'</div></div></button>';
   }
 
   if (state.activeTrilha === "concursos") {
@@ -4551,6 +4575,36 @@ function renderLeagueScreen(){
 }
 
 /* ================= RENDER: ONBOARDING / COMO FUNCIONA ================= */
+/* ================= ONBOARDING: OBJETIVO DO USUÁRIO (item 8) =================
+   Pergunta rápida no primeiro acesso, antes das telas explicativas, pra já abrir o app
+   na trilha certa (e futuramente permitir outras personalizações a partir de state.userGoal). */
+function renderOnboardingGoalScreen(){
+  let html = '<div class="overlay">' +
+    '<div class="overlay-top"><div></div></div>' +
+    '<div class="q-wrap onboarding-wrap" style="text-align:left;">' +
+      '<div class="eyebrow">Antes de começar</div>' +
+      '<h1 class="display" style="margin-bottom:10px;">Qual é o seu objetivo aqui?</h1>' +
+      '<p style="color:var(--text-dim);font-size:14.5px;margin:0 0 20px;">Assim já abrimos o app na trilha certa pra você — você pode trocar quando quiser.</p>' +
+      '<div style="display:flex;flex-direction:column;gap:10px;">' +
+        '<button type="button" class="unit-banner goal-opt" data-goal="concursos" style="width:calc(100% - 0px);text-align:left;cursor:pointer;border:none;margin:0;"><div><div class="u-title">◈ Passar em concurso público</div><div class="u-sub">Ainda não sou servidor — estou estudando pra prova</div></div></button>' +
+        '<button type="button" class="unit-banner goal-opt" data-goal="rpps" style="width:calc(100% - 0px);text-align:left;cursor:pointer;border:none;margin:0;"><div><div class="u-title">✚ Certificação/atuação em RPPS</div><div class="u-sub">Já sou servidor e preciso da certificação RPPS</div></div></button>' +
+        '<button type="button" class="unit-banner goal-opt" data-goal="ambos" style="width:calc(100% - 0px);text-align:left;cursor:pointer;border:none;margin:0;"><div><div class="u-title">🧭 Os dois</div><div class="u-sub">Quero acompanhar as duas trilhas</div></div></button>' +
+      '</div>' +
+      '<button type="button" id="goalSkipBtn" class="btn" style="width:100%;margin-top:16px;">Pular</button>' +
+    '</div>' +
+  '</div>';
+  app.innerHTML = html;
+  const choose = (goal) => {
+    state.userGoal = goal;
+    if (goal === "concursos" || goal === "rpps") state.activeTrilha = goal;
+    saveState();
+    currentScreen = "onboarding";
+    render();
+  };
+  app.querySelectorAll(".goal-opt").forEach(btn => btn.addEventListener("click", () => choose(btn.dataset.goal)));
+  const skipBtn = document.getElementById("goalSkipBtn");
+  if (skipBtn) skipBtn.addEventListener("click", () => choose("ambos"));
+}
 function renderOnboardingScreen(){
   const rpps = TRILHAS.find(t => t.id === "rpps");
   const concursos = TRILHAS.find(t => t.id === "concursos");
@@ -5675,8 +5729,15 @@ function renderCourseMenu(){
   });
 
   if (courseAllModulesDone(COURSE_CRP.id)) {
+    let certCodeLine = '';
+    if (prog.certIssued) {
+      const hadCode = !!prog.certCode;
+      certCodeLine = '<div class="footer-note" style="margin-top:8px;">Código de validação: <strong>'+courseCertCode(prog)+'</strong></div>';
+      if (!hadCode) saveState();
+    }
     html += '<div style="padding:0 20px;margin-top:6px;">' +
       '<button class="btn primary" id="courseCertBtn" style="width:100%;">🏆 '+(prog.certIssued ? 'Baixar novamente o certificado' : 'Emitir e baixar certificado')+'</button>' +
+      certCodeLine +
     '</div>';
   }
 
@@ -5996,14 +6057,38 @@ function generateCourseCertificate(){
   const linha = "concluiu o curso \"" + COURSE_CRP.titulo + "\", com aproveitamento mínimo de " + Math.round(COURSE_CRP.checkpointMinPct*100) + "% em todos os " + COURSE_CRP.modulos.length + " módulos.";
   doc.splitTextToSize(linha, pageW - 160).forEach((l, i) => doc.text(l, pageW / 2, 230 + i * 18, { align: "center" }));
 
+  const prog = courseProgressFor(COURSE_CRP.id);
+  if (!prog.certIssuedAt) prog.certIssuedAt = Date.now();
+  const code = courseCertCode(prog);
+
   doc.setFontSize(10);
   doc.text("Emitido em " + new Date().toLocaleDateString("pt-BR") + " · Curso piloto, sem carga horária de certificação oficial PQC associada nesta versão.", pageW / 2, pageH - 60, { align: "center" });
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.text("Código de validação: " + code, pageW / 2, pageH - 42, { align: "center" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.text("Para validar a autenticidade, envie nome completo e código para cefortv@gmail.com", pageW / 2, pageH - 28, { align: "center" });
 
-  const prog = courseProgressFor(COURSE_CRP.id);
   prog.certIssued = true;
   saveState();
 
   doc.save("certificado-crp-na-pratica-" + new Date().toISOString().slice(0,10) + ".pdf");
+}
+// Código de validação do certificado — determinístico a partir do usuário + curso + data de
+// emissão, gerado uma única vez (fica salvo em courseProgress) e reimpresso em qualquer
+// reimpressão/re-download do mesmo PDF. Verificação hoje é manual (por e-mail); se no futuro
+// quisermos uma consulta pública automática, precisará de uma tabela no Supabase (ver pendência
+// de migração SQL já anotada).
+function courseCertCode(prog){
+  if (!prog.certIssuedAt) prog.certIssuedAt = Date.now();
+  if (!prog.certCode) {
+    const raw = (cloudUser && cloudUser.id ? cloudUser.id : "anon") + "::" + COURSE_CRP.id + "::" + prog.certIssuedAt;
+    const a = Math.abs(simpleHash(raw)).toString(36).toUpperCase().padStart(4,"0").slice(0,4);
+    const b = Math.abs(simpleHash(raw.split("").reverse().join(""))).toString(36).toUpperCase().padStart(4,"0").slice(0,4);
+    prog.certCode = "VP-" + a + "-" + b;
+  }
+  return prog.certCode;
 }
 
 
@@ -6062,6 +6147,32 @@ function notebookReset(key){
   saveState();
 }
 function notebookDue(){ const now = Date.now(); return state.errorNotebook.filter(e => e.nextReviewAt <= now); }
+
+/* ================= AMOSTRA GRÁTIS (item 9 — antes do cadastro) =================
+   Deixa o visitante experimentar uma lição real, sem precisar criar conta, antes da tela de
+   login bloquear o resto do app. Não consome vidas, não grava stats/XP (visitante não tem
+   conta ainda) — termina com um convite pra criar conta. */
+const DEMO_UNIT_ID = "c01"; // Língua Portuguesa — porta de entrada mais convidativa p/ amostra
+function startDemoLesson(){
+  const unit = UNITS.find(u => u.id === DEMO_UNIT_ID) || UNITS[0];
+  const lesson = unit.lessons[0];
+  const questions = sampleQuestions(lesson.pool, LESSON_SAMPLE_SIZE);
+  session = { ui: null, li: null, qIdx: 0, correctCount: 0, selected: null, answered: false, questions: questions, optOrders: questions.map(q => shuffle(q.options.map((_,i)=>i))), bonusIdx: -1, bonusHit: false, textoBlocoOpen: false, isDemo: true, demoUnitTitle: unit.title };
+  render();
+}
+function finishDemoLesson(){
+  const total = session.questions.length;
+  const correctCount = session.correctCount;
+  app.innerHTML = '<div class="overlay"><div class="summary">' +
+    '<div class="stamp">🎯</div>' +
+    '<h2 class="display">Gostou da experiência?</h2>' +
+    '<p>Você acertou '+correctCount+' de '+total+' nesta amostra grátis de '+session.demoUnitTitle+'.</p>' +
+    '<p style="margin:-10px 0 22px;font-size:13.5px;color:var(--text-dim);">Crie sua conta grátis para salvar seu progresso, desbloquear todas as disciplinas de Concursos e RPPS, e continuar de onde parou.</p>' +
+    '<button class="btn primary" id="demoSignupBtn" style="width:100%;">Criar conta grátis</button>' +
+  '</div></div>';
+  const btn = document.getElementById("demoSignupBtn");
+  if (btn) btn.addEventListener("click", () => { session = null; loginGateMode = "email-signup"; render(); });
+}
 function startErrorReview(){
   const due = notebookDue();
   if (!due.length) { showToast("Nenhuma questão pendente de revisão agora — volte mais tarde."); return; }
@@ -6122,11 +6233,11 @@ function startLesson(ui, li){
 function currentQuestion(){ return session.questions[session.qIdx]; }
 
 function renderLesson(){
-  const lesson = session.isReview ? null : UNITS[session.ui].lessons[session.li];
+  const lesson = (session.isReview || session.isDemo) ? null : UNITS[session.ui].lessons[session.li];
   const q = currentQuestion();
   const total = session.questions.length;
   const pct = Math.round((session.qIdx / total) * 100);
-  const eyebrowLabel = session.isReview ? "📓 Caderno de Erros" : lesson.title;
+  const eyebrowLabel = session.isReview ? "📓 Caderno de Erros" : (session.isDemo ? "🎯 Amostra grátis · " + session.demoUnitTitle : lesson.title);
 
   let html = '<div class="overlay">' +
     '<div class="overlay-top">' +
@@ -6250,6 +6361,13 @@ function selectAnswer(i){
     playAnswerFx(correct);
     return;
   }
+  if (session.isDemo) {
+    // Amostra grátis pré-cadastro: não há conta ainda, então não consome vidas nem grava stats.
+    if (correct) session.correctCount++;
+    renderLesson();
+    playAnswerFx(correct);
+    return;
+  }
   recordAnswerStat(session.ui, correct);
   if (correct) {
     session.correctCount++;
@@ -6337,6 +6455,8 @@ function nextStep(){
     renderLesson();
   } else if (session.isReview) {
     finishErrorReview();
+  } else if (session.isDemo) {
+    finishDemoLesson();
   } else {
     finishLesson();
   }
