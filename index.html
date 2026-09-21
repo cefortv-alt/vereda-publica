@@ -434,11 +434,17 @@
 
   /* ---------- Login gate ---------- */
   .login-gate {
-    position: fixed; inset: 0; background: var(--paper); z-index: 60;
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    position: fixed; inset: 0; background: var(--paper); z-index: 60; overflow-y: auto;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
     padding: 30px; text-align: center;
   }
-  .lg-brand { font-family: 'Fraunces', serif; font-weight: 600; font-size: 22px; margin-bottom: 30px; }
+  .lg-brand { font-family: 'Fraunces', serif; font-weight: 600; font-size: 22px; margin: 10px 0 22px; }
+  .lg-about { max-width: 420px; margin: 0 auto 30px; text-align: left; }
+  .lg-about h2 { font-size: 19px; margin: 0 0 10px; text-align: center; }
+  .lg-about > p { color: var(--text-dim); font-size: 14.5px; line-height: 1.55; margin: 0 0 18px; text-align: center; }
+  .lg-about ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+  .lg-about li { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; line-height: 1.45; color: var(--text); background: var(--paper-card); border: 1px solid var(--paper-line); border-radius: 12px; padding: 10px 12px; }
+  .lg-about li .ico { font-size: 18px; flex: 0 0 auto; }
   .lg-card { max-width: 320px; display: flex; flex-direction: column; align-items: center; }
   .lg-icon { font-size: 46px; margin-bottom: 10px; }
   .lg-card h1 { font-size: 22px; margin: 4px 0 10px; }
@@ -4189,6 +4195,17 @@ function renderLoginGate(){
   }
   let html = '<div class="login-gate">' +
     '<div class="lg-brand">Vereda Pública</div>' +
+    '<div class="lg-about">' +
+      '<h2>O que é o Vereda Pública</h2>' +
+      '<p>Aplicativo educacional gamificado, estilo trilhas de aprendizagem, para quem estuda para concursos públicos e para profissionais que buscam certificação em Regime Próprio de Previdência Social (RPPS). Produzido pelo IPATE — Instituto de Pesquisas Avançadas em Tecnologia e Educação.</p>' +
+      '<ul>' +
+        '<li><span class="ico">🧭</span><span>Duas trilhas de estudo com milhares de questões: Concursos Públicos (mais de 40 disciplinas) e RPPS (mais de 15 disciplinas).</span></li>' +
+        '<li><span class="ico">🎮</span><span>Minijogos de vocabulário e revisão (sinônimos/antônimos, forca, crase) para tornar o estudo mais leve.</span></li>' +
+        '<li><span class="ico">📝</span><span>Simulados cronometrados nas condições da prova real, com resultado detalhado e PDF de revisão.</span></li>' +
+        '<li><span class="ico">🎓</span><span>Curso gamificado de Qualificação Continuada, com certificado ao final, dentro da trilha RPPS.</span></li>' +
+        '<li><span class="ico">🏆</span><span>XP, sequência de dias de estudo e liga semanal entre usuários para manter a constância.</span></li>' +
+      '</ul>' +
+    '</div>' +
     inner +
     '<div class="footer-note" style="max-width:340px;margin:0 auto;line-height:1.5;">O Vereda Pública é um aplicativo educacional independente, produzido pelo IPATE (Instituto de Pesquisas Avançadas em Tecnologia e Educação), entidade privada. <strong>Não possui vínculo, afiliação ou representação oficial com nenhum órgão ou entidade governamental.</strong> As leis e normativos citados nas questões têm caráter informativo/didático; consulte as fontes oficiais em <a href="https://www.gov.br" target="_blank" style="color:inherit;">gov.br</a> e <a href="https://www.planalto.gov.br/ccivil_03" target="_blank" style="color:inherit;">planalto.gov.br/ccivil_03</a>.</div>' +
     '<div class="footer-note">Precisa de ajuda? <a href="mailto:cefortv@gmail.com" style="color:inherit;">cefortv@gmail.com</a></div>' +
