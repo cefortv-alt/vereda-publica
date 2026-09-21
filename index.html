@@ -203,6 +203,7 @@
   }
   .unit-banner .u-title { font-family: 'Fraunces', serif; font-weight: 600; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .unit-banner .u-sub { font-size: 12px; opacity: 0.75; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .unit-badge-soon { flex: 0 0 auto; background: var(--gold-deep); color: #fff; font-size: 10.5px; font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase; padding: 4px 9px; border-radius: 999px; white-space: nowrap; }
   .jogos-tile .u-title, .jogos-tile .u-sub { white-space: normal; overflow: visible; text-overflow: clip; }
   .unit-banner > div { min-width: 0; flex: 1 1 auto; }
 
@@ -319,6 +320,7 @@
   .nav-btn svg { width: 20px; height: 20px; }
   .nav-btn img.nav-icon-img { width: 44px; height: 44px; border-radius: 10px; object-fit: cover; display: block; }
   .nav-btn.active { color: var(--ink); }
+  .nav-badge-dot { position: absolute; top: 2px; right: calc(50% - 20px); background: var(--gold-deep); color: #fff; font-size: 9.5px; font-weight: 800; min-width: 15px; height: 15px; border-radius: 999px; display: flex; align-items: center; justify-content: center; padding: 0 3px; line-height: 1; }
   .jogos-tile-icon img.nav-icon-img { width: 100%; height: 100%; border-radius: 8px; object-fit: cover; display: block; }
   .jogos-tile { align-items: flex-start !important; }
   .jogos-back-btn { background: none; border: none; display: inline-flex; align-items: center; gap: 4px; color: var(--text-dim); font-size: 14px; font-weight: 700; padding: 6px 4px; margin: -6px 0 4px -4px; cursor: pointer; }
@@ -658,6 +660,13 @@ const TRILHAS = [
   { id: "concursos", label: "Concursos Públicos", heroTitle: "A aprovação se constrói questão por questão", icon: "◈", finishLine: "Rumo à posse" }
 ];
 function unitsForTrilha(trilha){ return UNITS.filter(u => u.trilha === trilha); }
+const UNIT_QUESTION_FLOOR = 72; // piso de referência do acervo (definido em 10/09) — abaixo disso, a unidade leva o selo "Em breve"
+function unitQuestionCount(u){ return u.lessons.reduce((sum, l) => sum + (l.pool ? l.pool.length : 0), 0); }
+function unitBadgeHtml(u){
+  return unitQuestionCount(u) < UNIT_QUESTION_FLOOR
+    ? '<span class="unit-badge-soon" title="Estamos ampliando o banco de questões desta disciplina">Em breve</span>'
+    : '';
+}
 const BOT_NAMES = ["Marina T.", "Carlos E.", "Fernanda R.", "Bruno S.", "Patrícia L.", "Eduardo M.", "Camila V.", "Rafael N.", "Juliana P.", "André C.", "Beatriz A.", "Diego F.", "Larissa Q.", "Vanessa D.", "Gustavo B.", "Renata K.", "Felipe O."];
 
 /* ================= PERSONAGEM (avatar do participante) ================= */
@@ -3552,6 +3561,7 @@ function normalizeState(s){
   if (s.craseandoBest === undefined) s.craseandoBest = 0;
   if (s.craseandoPlays === undefined) s.craseandoPlays = 0;
   if (!s.courseProgress) s.courseProgress = {};
+  if (!Array.isArray(s.errorNotebook)) s.errorNotebook = [];
   return s;
 }
 // Lê e normaliza o estado salvo sob uma chave específica do localStorage (genérica, de visitante,
@@ -4090,10 +4100,16 @@ const JOGOS_SCREENS = ["jogos", "speed", "forca", "craseando"];
 function bottomNavHtml(opts){
   const ghost = opts && opts.ghost;
   const jogosActive = JOGOS_SCREENS.indexOf(currentScreen) !== -1;
+  const dueCount = notebookDue().length;
   return '<div class="bottom-nav'+(ghost ? ' ghost' : '')+'">' +
     '<button class="nav-btn '+(currentScreen==='home'?'active':'')+'" data-screen="home">'+pathIcon()+'<span>Trilha</span></button>' +
     '<button class="nav-btn '+(jogosActive?'active':'')+'" data-screen="jogos">'+jogosIcon()+'<span>Jogos</span></button>' +
     '<button class="nav-btn nav-liga '+(currentScreen==='league'?'active':'')+'" data-screen="league">'+trophyIcon()+'<span>Liga</span></button>' +
+    '<button class="nav-btn '+(currentScreen==='errorNotebook'?'active':'')+'" data-screen="errorNotebook" style="position:relative;">' +
+      '<span style="font-size:20px;line-height:1;">📓</span>' +
+      (dueCount ? '<span class="nav-badge-dot">'+(dueCount>9?'9+':dueCount)+'</span>' : '') +
+      '<span>Erros</span>' +
+    '</button>' +
     '<button class="nav-btn '+(currentScreen==='boletim'?'active':'')+'" data-screen="boletim"><img class="nav-icon-img" src="'+ICON_IMAGES.boletim+'" alt="Boletim"><span>Boletim</span></button>' +
   '</div>';
 }
@@ -4132,6 +4148,7 @@ function render(){
   else if (currentScreen === "courseUma") renderCourseUma();
   else if (currentScreen === "courseCheckpoint") renderCourseCheckpoint();
   else if (currentScreen === "trilhaRpps") renderTrilhaRpps();
+  else if (currentScreen === "errorNotebook") renderErrorNotebookScreen();
   else renderHome();
 }
 let loginGateMode = "start";
@@ -4336,7 +4353,7 @@ function renderHome(){
       const ui = UNITS.indexOf(u);
       const doneInUnit = u.lessons.filter(l => isLessonDone(l.id)).length;
       const unitPos = unitsForTrilha(state.activeTrilha).indexOf(u) + 1;
-      html += '<div class="unit-banner"><div><div class="u-title">'+u.icon+'  Unidade '+unitPos+' · '+u.title+'</div><div class="u-sub">'+doneInUnit+'/'+u.lessons.length+' lições</div></div></div>';
+      html += '<div class="unit-banner"><div><div class="u-title">'+u.icon+'  Unidade '+unitPos+' · '+u.title+'</div><div class="u-sub">'+doneInUnit+'/'+u.lessons.length+' lições</div></div>'+unitBadgeHtml(u)+'</div>';
       html += '<div class="path">';
       u.lessons.forEach((l, li) => {
         const done = isLessonDone(l.id);
@@ -4429,7 +4446,7 @@ function renderTrilhaRpps(){
     const ui = UNITS.indexOf(u);
     const doneInUnit = u.lessons.filter(l => isLessonDone(l.id)).length;
     const unitPos = unitsForTrilha("rpps").indexOf(u) + 1;
-    html += '<div class="unit-banner"><div><div class="u-title">'+u.icon+'  Unidade '+unitPos+' · '+u.title+'</div><div class="u-sub">'+doneInUnit+'/'+u.lessons.length+' lições</div></div></div>';
+    html += '<div class="unit-banner"><div><div class="u-title">'+u.icon+'  Unidade '+unitPos+' · '+u.title+'</div><div class="u-sub">'+doneInUnit+'/'+u.lessons.length+' lições</div></div>'+unitBadgeHtml(u)+'</div>';
     html += '<div class="path">';
     u.lessons.forEach((l, li) => {
       const done = isLessonDone(l.id);
@@ -5996,6 +6013,101 @@ function sampleQuestions(pool, n){
   const order = shuffle(pool.map((_,i)=>i));
   return order.slice(0, Math.min(n, pool.length)).map(i => pool[i]);
 }
+
+/* ================= CADERNO DE ERROS (revisão espaçada) =================
+   Toda questão respondida errada numa lição normal entra aqui. Ela volta a aparecer
+   para revisão em intervalos crescentes (1, 3, 7, 15 dias); acertar na revisão avança
+   pro próximo intervalo (e "gradua"/sai do caderno depois do último), errar de novo
+   volta pro intervalo de 1 dia. Guardado só localmente (localStorage) por enquanto —
+   não sincroniza entre aparelhos ainda. */
+const SPACED_REVIEW_INTERVALS_DAYS = [1, 3, 7, 15];
+function simpleHash(str){
+  let h = 0;
+  for (let i = 0; i < str.length; i++) { h = (h << 5) - h + str.charCodeAt(i); h |= 0; }
+  return h;
+}
+function notebookKeyFor(unitId, lessonId, q){ return unitId + "::" + lessonId + "::" + simpleHash(q.q || ""); }
+function notebookFind(key){ return state.errorNotebook.find(e => e.key === key); }
+function notebookRecordWrong(unitIdx, lessonId, q){
+  const unitId = UNITS[unitIdx].id;
+  const key = notebookKeyFor(unitId, lessonId, q);
+  let entry = notebookFind(key);
+  const now = Date.now();
+  if (!entry) {
+    entry = { key: key, unitId: unitId, unitIdx: unitIdx, lessonId: lessonId, q: q.q, options: q.options.slice(), correct: q.correct, tip: q.tip, intervalIdx: 0, timesWrong: 0, addedAt: now };
+    state.errorNotebook.push(entry);
+  }
+  entry.timesWrong++;
+  entry.intervalIdx = 0;
+  entry.nextReviewAt = now + SPACED_REVIEW_INTERVALS_DAYS[0] * 86400000;
+  saveState();
+}
+function notebookAdvance(key){
+  const entry = notebookFind(key);
+  if (!entry) return;
+  entry.intervalIdx++;
+  if (entry.intervalIdx >= SPACED_REVIEW_INTERVALS_DAYS.length) {
+    state.errorNotebook = state.errorNotebook.filter(e => e.key !== key); // graduou — sai do caderno
+  } else {
+    entry.nextReviewAt = Date.now() + SPACED_REVIEW_INTERVALS_DAYS[entry.intervalIdx] * 86400000;
+  }
+  saveState();
+}
+function notebookReset(key){
+  const entry = notebookFind(key);
+  if (!entry) return;
+  entry.timesWrong++;
+  entry.intervalIdx = 0;
+  entry.nextReviewAt = Date.now() + SPACED_REVIEW_INTERVALS_DAYS[0] * 86400000;
+  saveState();
+}
+function notebookDue(){ const now = Date.now(); return state.errorNotebook.filter(e => e.nextReviewAt <= now); }
+function startErrorReview(){
+  const due = notebookDue();
+  if (!due.length) { showToast("Nenhuma questão pendente de revisão agora — volte mais tarde."); return; }
+  const questions = due.map(entry => ({ q: entry.q, options: entry.options, correct: entry.correct, tip: entry.tip, __notebookKey: entry.key }));
+  session = { ui: null, li: null, qIdx: 0, correctCount: 0, selected: null, answered: false, questions: questions, optOrders: questions.map(q => shuffle(q.options.map((_,i)=>i))), bonusIdx: -1, bonusHit: false, textoBlocoOpen: false, isReview: true };
+  render();
+}
+function finishErrorReview(){
+  const total = session.questions.length;
+  const correctCount = session.correctCount;
+  const earnedXP = correctCount * 5;
+  if (earnedXP) addXP(earnedXP, state.activeTrilha, false);
+  saveState();
+  app.innerHTML = '<div class="overlay"><div class="summary">' +
+    '<div class="stamp">📓</div>' +
+    '<h2 class="display">Revisão concluída</h2>' +
+    '<p>Você revisou '+total+' questão'+(total===1?'':'ões')+' do Caderno de Erros — '+correctCount+' certa'+(correctCount===1?'':'s')+'.</p>' +
+    (earnedXP ? '<div class="bonus-badge">+'+earnedXP+' XP</div>' : '') +
+    '<button class="btn primary" id="reviewDoneBtn">Continuar</button>' +
+  '</div></div>';
+  const btn = document.getElementById("reviewDoneBtn");
+  if (btn) btn.addEventListener("click", () => { session = null; currentScreen = "errorNotebook"; render(); });
+}
+function renderErrorNotebookScreen(){
+  const total = state.errorNotebook.length;
+  const due = notebookDue();
+  let html = renderTopbar();
+  html += '<div class="hero">' +
+    '<div class="eyebrow">Caderno de Erros</div>' +
+    '<h1 class="display">Revisão espaçada</h1>' +
+    '<p>Toda questão que você erra numa lição entra aqui e volta em intervalos crescentes (1, 3, 7 e 15 dias) até você dominá-la de vez.</p>' +
+  '</div>';
+  if (!total) {
+    html += '<div class="unit-banner"><div><div class="u-title">📓 Caderno vazio</div><div class="u-sub">Nenhuma questão pendente — continue estudando, o que você errar cai aqui automaticamente.</div></div></div>';
+  } else {
+    html += '<div class="unit-banner"><div><div class="u-title">📓 '+total+' questão'+(total===1?'':'ões')+' no caderno</div><div class="u-sub">'+(due.length ? due.length+' pronta'+(due.length===1?'':'s')+' para revisar agora' : 'Nenhuma pendente agora — volte mais tarde')+'</div></div></div>';
+    html += '<div style="padding:0 20px 14px;"><button class="btn primary" id="startReviewBtn" style="width:100%;"'+(due.length?'':' disabled')+'>'+(due.length ? '📓 Revisar agora ('+due.length+')' : 'Nada pendente agora')+'</button></div>';
+  }
+  html += '<div class="footer-note">Vereda Pública · Precisa de ajuda? <a href="mailto:cefortv@gmail.com" style="color:inherit;">cefortv@gmail.com</a></div>';
+  html += bottomNavHtml();
+  app.innerHTML = html;
+  attachTopbarListeners();
+  attachNavListeners();
+  const startBtn = document.getElementById("startReviewBtn");
+  if (startBtn) startBtn.addEventListener("click", startErrorReview);
+}
 function startLesson(ui, li){
   ensureHeartsCurrent();
   if (state.hearts <= 0) { currentScreen = "home"; renderHeartsWaiting(); return; }
@@ -6010,10 +6122,11 @@ function startLesson(ui, li){
 function currentQuestion(){ return session.questions[session.qIdx]; }
 
 function renderLesson(){
-  const lesson = UNITS[session.ui].lessons[session.li];
+  const lesson = session.isReview ? null : UNITS[session.ui].lessons[session.li];
   const q = currentQuestion();
   const total = session.questions.length;
   const pct = Math.round((session.qIdx / total) * 100);
+  const eyebrowLabel = session.isReview ? "📓 Caderno de Erros" : lesson.title;
 
   let html = '<div class="overlay">' +
     '<div class="overlay-top">' +
@@ -6022,9 +6135,9 @@ function renderLesson(){
       '<div class="lives-mini">' + Array.from({length: MAX_HEARTS}).map((_,i)=> '<span>'+(i < state.hearts ? '♥' : '♡')+'</span>').join('') + '</div>' +
     '</div>' +
     '<div class="q-wrap">' +
-      '<div class="q-eyebrow">'+lesson.title+' · Pergunta '+(session.qIdx+1)+' de '+total+'</div>' +
+      '<div class="q-eyebrow">'+eyebrowLabel+' · Pergunta '+(session.qIdx+1)+' de '+total+'</div>' +
       (session.qIdx === session.bonusIdx ? '<div class="bonus-badge">⚡ Questão bônus — XP em dobro!</div>' : '') +
-      (lesson.textoBloco ? (
+      (lesson && lesson.textoBloco ? (
         '<div class="texto-bloco">' +
           '<button type="button" id="textoBlocoToggle" class="btn ghost" style="width:100%;text-align:left;margin-bottom:'+(session.textoBlocoOpen?'10px':'0')+';">' +
             (session.textoBlocoOpen ? '▾ Ocultar texto de referência' : '▸ Ver texto de referência') +
@@ -6128,6 +6241,15 @@ function selectAnswer(i){
   session.selected = i;
   session.answered = true;
   const correct = (i === q.correct);
+  if (session.isReview) {
+    // Revisão do Caderno de Erros: não consome vidas nem conta stats de disciplina —
+    // é um modo de prática de baixo risco, pra não fazer o aluno evitar revisar.
+    if (correct) { session.correctCount++; notebookAdvance(q.__notebookKey); }
+    else { notebookReset(q.__notebookKey); }
+    renderLesson();
+    playAnswerFx(correct);
+    return;
+  }
   recordAnswerStat(session.ui, correct);
   if (correct) {
     session.correctCount++;
@@ -6137,6 +6259,7 @@ function selectAnswer(i){
     state.hearts = Math.max(0, state.hearts - 1);
     if (state.hearts === 0 && !state.heartsEmptyAt) state.heartsEmptyAt = Date.now();
     saveState();
+    notebookRecordWrong(session.ui, UNITS[session.ui].lessons[session.li].id, q);
   }
   renderLesson();
   playAnswerFx(correct);
@@ -6212,6 +6335,8 @@ function nextStep(){
   if (session.qIdx + 1 < session.questions.length) {
     session.qIdx++; session.answered = false; session.selected = null;
     renderLesson();
+  } else if (session.isReview) {
+    finishErrorReview();
   } else {
     finishLesson();
   }
