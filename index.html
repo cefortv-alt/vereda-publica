@@ -3375,6 +3375,7 @@ async function hydrateFromCloud(user){
       }
       state.heartsEmptyAt = profile.hearts_empty_at ? new Date(profile.hearts_empty_at).getTime() : state.heartsEmptyAt;
       if (profile.unlimited_lives_until !== undefined) state.unlimitedLivesUntil = profile.unlimited_lives_until ? new Date(profile.unlimited_lives_until).getTime() : null;
+      if (profile.cpf !== undefined && profile.cpf) state.userCpf = profile.cpf;
       state.speedHighScore = profile.speed_high_score ?? state.speedHighScore;
       state.totalTimeMs = Math.max(profile.total_time_ms || 0, state.totalTimeMs || 0);
       if (profile.active_trilha && TRILHAS.find(t => t.id === profile.active_trilha)) state.activeTrilha = profile.active_trilha;
@@ -3425,6 +3426,7 @@ function pushToCloudNow(){
     hearts: state.hearts,
     hearts_empty_at: state.heartsEmptyAt ? new Date(state.heartsEmptyAt).toISOString() : null,
     unlimited_lives_until: state.unlimitedLivesUntil ? new Date(state.unlimitedLivesUntil).toISOString() : null,
+    cpf: state.userCpf || null,
     speed_high_score: state.speedHighScore,
     active_trilha: state.activeTrilha,
     completed_lessons: state.completedLessons,
@@ -3443,7 +3445,7 @@ function pushToCloudNow(){
   };
   // Colunas adicionadas nesta leva: se a migração ainda não rodou no Supabase, o upsert acima falha
   // por coluna inexistente — reenvia então só com as colunas "base" (já existentes antes desta leva).
-  const NEW_OPTIONAL_COLUMNS = ["total_time_ms","total_answered","total_correct","unit_stats","simulado_historico","forca_wins","trilha_medals","simulados_gerados","onboarding_seen","craseando_best","craseando_plays","unlimited_lives_until"];
+  const NEW_OPTIONAL_COLUMNS = ["total_time_ms","total_answered","total_correct","unit_stats","simulado_historico","forca_wins","trilha_medals","simulados_gerados","onboarding_seen","craseando_best","craseando_plays","unlimited_lives_until","cpf"];
   sb.from("profiles").upsert(profileRow).then(({ error }) => {
     if (error) {
       const fallbackRow = {}; Object.keys(profileRow).forEach(k => { if (!NEW_OPTIONAL_COLUMNS.includes(k)) fallbackRow[k] = profileRow[k]; });
@@ -3513,7 +3515,7 @@ const COURSE_CRP_UMAS = [{"modulo":1,"aula":"1.1","uma":"1.1.0","titulo":"Por qu
    Thiago. Checkpoint de módulo: 70% mínimo, sem remediação automática — reprovação permite refazer
    o módulo livremente.
 */
-const COURSE_CRP = { id: "crp-na-pratica", titulo: "CRP na Prática — Jornada Gamificada", checkpointMinPct: 0.7 };
+const COURSE_CRP = { id: "crp-na-pratica", titulo: "CRP na Prática — Jornada Gamificada", checkpointMinPct: 0.7, cargaHoraria: 5 };
 function courseModulos(courseId){
   const src = courseId === COURSE_CRP.id ? COURSE_CRP_UMAS : [];
   const nums = Array.from(new Set(src.map(u => u.modulo))).sort((a,b)=>a-b);
@@ -3584,6 +3586,7 @@ function normalizeState(s){
   if (!s.courseProgress) s.courseProgress = {};
   if (!Array.isArray(s.errorNotebook)) s.errorNotebook = [];
   if (s.userGoal === undefined) s.userGoal = null;
+  if (s.userCpf === undefined) s.userCpf = null;
   if (s.unlimitedLivesUntil === undefined) s.unlimitedLivesUntil = null;
   return s;
 }
@@ -4323,6 +4326,7 @@ function render(){
   else if (currentScreen === "trilhaRpps") renderTrilhaRpps();
   else if (currentScreen === "errorNotebook") renderErrorNotebookScreen();
   else if (currentScreen === "adminPix") renderAdminPixScreen();
+  else if (currentScreen === "courseCertCpf") renderCourseCertCpf();
   else renderHome();
 }
 let loginGateMode = "start";
@@ -5942,7 +5946,60 @@ function renderCourseMenu(){
     card.addEventListener("click", () => startCourseModulo(n));
   });
   const certBtn = document.getElementById("courseCertBtn");
-  if (certBtn) certBtn.addEventListener("click", () => generateCourseCertificate());
+  if (certBtn) certBtn.addEventListener("click", () => {
+    if (!state.userCpf) { certCpfMsg = null; currentScreen = "courseCertCpf"; render(); }
+    else generateCourseCertificate();
+  });
+}
+
+function cpfDigits(str){ return (str || "").replace(/\D/g, ""); }
+function formatCpf(str){
+  const d = cpfDigits(str).slice(0, 11);
+  let out = d;
+  if (d.length > 9) out = d.slice(0,3)+"."+d.slice(3,6)+"."+d.slice(6,9)+"-"+d.slice(9);
+  else if (d.length > 6) out = d.slice(0,3)+"."+d.slice(3,6)+"."+d.slice(6);
+  else if (d.length > 3) out = d.slice(0,3)+"."+d.slice(3);
+  return out;
+}
+function isValidCpf(str){
+  const d = cpfDigits(str);
+  if (d.length !== 11 || /^(\d)\1{10}$/.test(d)) return false;
+  const calc = (len) => {
+    let sum = 0;
+    for (let i = 0; i < len; i++) sum += parseInt(d[i], 10) * (len + 1 - i);
+    const r = (sum * 10) % 11;
+    return r === 10 ? 0 : r;
+  };
+  return calc(9) === parseInt(d[9], 10) && calc(10) === parseInt(d[10], 10);
+}
+let certCpfMsg = null;
+function renderCourseCertCpf(){
+  let html = renderTopbar();
+  html += '<div class="hero">' +
+    '<div class="eyebrow">🏆 Emitir certificado</div>' +
+    '<h1 class="display">Confirme seu CPF</h1>' +
+    '<p>Precisamos do seu CPF para emitir o certificado em seu nome. Ele é usado apenas neste documento.</p>' +
+  '</div>';
+  html += '<div style="padding:0 20px 20px;">' +
+    (certCpfMsg ? '<p style="color:var(--red, #b3261e);font-weight:600;">'+certCpfMsg+'</p>' : '') +
+    '<input class="btn" style="display:block;width:100%;text-align:left;margin-bottom:10px;background:#fff;" id="certCpfInput" type="text" inputmode="numeric" placeholder="000.000.000-00" value="'+formatCpf(state.userCpf || "")+'">' +
+    '<button class="btn primary" id="certCpfSubmitBtn" style="width:100%;">Continuar</button>' +
+    '<button class="btn" id="certCpfBackBtn" style="width:100%;margin-top:8px;">Voltar</button>' +
+  '</div>';
+  html += bottomNavHtml();
+  app.innerHTML = html;
+  attachTopbarListeners();
+  attachNavListeners();
+  const input = document.getElementById("certCpfInput");
+  input.addEventListener("input", () => { input.value = formatCpf(input.value); });
+  document.getElementById("certCpfBackBtn").addEventListener("click", () => { currentScreen = "courseMenu"; render(); });
+  document.getElementById("certCpfSubmitBtn").addEventListener("click", () => {
+    const v = document.getElementById("certCpfInput").value;
+    if (!isValidCpf(v)) { certCpfMsg = "CPF inválido. Confira os números digitados."; render(); return; }
+    state.userCpf = formatCpf(v);
+    saveState();
+    generateCourseCertificate();
+  });
 }
 
 // Corrige a exibição do indicador ordinal (º/ª), que em alguns aparelhos/fontes é renderizado
@@ -6207,6 +6264,12 @@ function renderCourseCheckpoint(){
   document.getElementById("courseBackToMenuBtn").addEventListener("click", () => { currentScreen = "courseMenu"; render(); });
 }
 
+const NUM_EXTENSO_PT = ["zero","um","dois","três","quatro","cinco","seis","sete","oito","nove","dez",
+  "onze","doze","treze","catorze","quinze","dezesseis","dezessete","dezoito","dezenove","vinte",
+  "vinte e um","vinte e dois","vinte e três","vinte e quatro","vinte e cinco","vinte e seis","vinte e sete","vinte e oito","vinte e nove","trinta"];
+function horasExtenso(n){
+  return (n >= 0 && n < NUM_EXTENSO_PT.length) ? NUM_EXTENSO_PT[n] : String(n);
+}
 function generateCourseCertificate(){
   if (typeof window.jspdf === "undefined" || !window.jspdf.jsPDF) {
     alert("Não foi possível gerar o PDF agora (biblioteca de geração não carregou — verifique sua conexão com a internet e tente novamente).");
@@ -6217,48 +6280,105 @@ function generateCourseCertificate(){
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
   const nome = (cloudUser && cloudUser.name) ? cloudUser.name : "Aluno(a)";
+  const cpf = state.userCpf || "";
 
-  doc.setDrawColor(201, 162, 39);
-  doc.setLineWidth(3);
-  doc.rect(24, 24, pageW - 48, pageH - 48);
-  doc.setLineWidth(1);
-  doc.rect(34, 34, pageW - 68, pageH - 68);
+  const navy = [74, 84, 105];
+  const gold = [201, 162, 39];
 
-  doc.setFont("helvetica", "bold");
+  // Faixa superior + friso dourado
+  const headerH = 108;
+  doc.setFillColor(navy[0], navy[1], navy[2]);
+  doc.rect(0, 0, pageW, headerH, "F");
+  doc.setFillColor(gold[0], gold[1], gold[2]);
+  doc.rect(0, headerH, pageW, 6, "F");
+
+  try {
+    if (ICON_IMAGES && ICON_IMAGES.IPATE_BOT) doc.addImage(ICON_IMAGES.IPATE_BOT, "PNG", 34, 14, 78, 78);
+  } catch (e) { /* logo é decorativo — segue sem ele se a imagem falhar */ }
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(15);
+  doc.setTextColor(255, 255, 255);
+  doc.text("IPATE - VEREDA PÚBLICA", pageW / 2 + 30, headerH / 2 + 5, { align: "center" });
+
+  // Moldura fina
+  doc.setDrawColor(gold[0], gold[1], gold[2]);
+  doc.setLineWidth(1.5);
+  doc.rect(20, headerH + 20, pageW - 40, pageH - headerH - 40);
+
+  let y = headerH + 78;
+  doc.setFont("times", "bold");
+  doc.setFontSize(46);
+  doc.setTextColor(navy[0], navy[1], navy[2]);
+  doc.text("CERTIFICADO", pageW / 2, y, { align: "center" });
+
+  y += 36;
+  doc.setFont("helvetica", "normal");
   doc.setFontSize(13);
-  doc.setTextColor(44, 59, 74);
-  doc.text("IPATE · VEREDA PÚBLICA", pageW / 2, 78, { align: "center" });
+  doc.setTextColor(60, 60, 60);
+  doc.text("Certificamos que", pageW / 2, y, { align: "center" });
 
+  y += 40;
+  doc.setFont("times", "bolditalic");
   doc.setFontSize(28);
-  doc.text("Certificado de Conclusão", pageW / 2, 130, { align: "center" });
+  doc.setTextColor(gold[0], gold[1], gold[2]);
+  doc.text(nome, pageW / 2, y, { align: "center" });
 
+  y += 12;
+  doc.setDrawColor(180, 180, 180);
+  doc.setLineWidth(0.75);
+  doc.line(pageW / 2 - 150, y, pageW / 2 + 150, y);
+
+  y += 26;
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(13);
-  doc.text("Certificamos que", pageW / 2, 168, { align: "center" });
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(22);
-  doc.setTextColor(201, 162, 39);
-  doc.text(nome, pageW / 2, 200, { align: "center" });
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(13);
+  doc.setFontSize(12.5);
   doc.setTextColor(44, 59, 74);
-  const linha = "concluiu o curso \"" + COURSE_CRP.titulo + "\", com aproveitamento mínimo de " + Math.round(COURSE_CRP.checkpointMinPct*100) + "% em todos os " + COURSE_CRP.modulos.length + " módulos.";
-  doc.splitTextToSize(linha, pageW - 160).forEach((l, i) => doc.text(l, pageW / 2, 230 + i * 18, { align: "center" }));
+  const pctMin = Math.round(COURSE_CRP.checkpointMinPct * 100);
+  const dataConclusao = new Date().toLocaleDateString("pt-BR");
+  const paragrafo = (cpf ? "inscrito(a) no CPF nº " + cpf + ", " : "") +
+    "concluiu com êxito o curso \"" + COURSE_CRP.titulo + "\", realizado pelo IPATE – Instituto de Pesquisas Avançadas em Tecnologia e Educação, obtendo aproveitamento mínimo de " + pctMin + "% em todos os módulos. " +
+    "O curso foi concluído em " + dataConclusao + ", com carga horária total de " + COURSE_CRP.cargaHoraria + " (" + horasExtenso(COURSE_CRP.cargaHoraria) + ") horas.";
+  doc.splitTextToSize(paragrafo, pageW - 220).forEach((l, i) => { doc.text(l, pageW / 2, y + i * 17, { align: "center" }); y += 0; });
+  const paragrafoLinhas = doc.splitTextToSize(paragrafo, pageW - 220).length;
+  y += paragrafoLinhas * 17 + 22;
+
+  doc.setFontSize(12.5);
+  doc.text("Palhoça-SC, " + new Date().toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" }) + ".", pageW / 2, y, { align: "center" });
+
+  y += 46;
+  doc.setDrawColor(navy[0], navy[1], navy[2]);
+  doc.setLineWidth(0.75);
+  doc.line(pageW / 2 - 90, y, pageW / 2 + 90, y);
+  y += 16;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.text("Thiago Andrigo Vesely", pageW / 2, y, { align: "center" });
+  y += 14;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.setTextColor(90, 90, 90);
+  doc.text("Diretor Geral", pageW / 2, y, { align: "center" });
+
+  // Bolinhas decorativas no canto inferior direito
+  doc.setFillColor(gold[0], gold[1], gold[2]);
+  [0, 1, 2].forEach(i => doc.circle(pageW - 60 + i * 14, pageH - 40, 3, "F"));
 
   const prog = courseProgressFor(COURSE_CRP.id);
   if (!prog.certIssuedAt) prog.certIssuedAt = Date.now();
   const code = courseCertCode(prog);
 
-  doc.setFontSize(10);
-  doc.text("Emitido em " + new Date().toLocaleDateString("pt-BR") + " · Curso piloto, sem carga horária de certificação oficial PQC associada nesta versão.", pageW / 2, pageH - 60, { align: "center" });
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
-  doc.text("Código de validação: " + code, pageW / 2, pageH - 42, { align: "center" });
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.text("Para validar a autenticidade, envie nome completo e código para cefortv@gmail.com", pageW / 2, pageH - 28, { align: "center" });
+  doc.setFontSize(8.5);
+  doc.setTextColor(120, 120, 120);
+  doc.text("Emitido em " + new Date().toLocaleDateString("pt-BR") + " · Curso piloto, sem carga horária de certificação oficial PQC associada nesta versão.", pageW / 2, pageH - 26, { align: "center" });
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9.5);
+  doc.setTextColor(60, 60, 60);
+  doc.text("Código de validação: " + code, pageW / 2, pageH - 14, { align: "center" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(120, 120, 120);
+  doc.text("Para validar a autenticidade, envie nome completo e código para cefortv@gmail.com", pageW / 2, pageH - 40, { align: "center" });
 
   prog.certIssued = true;
   saveState();
