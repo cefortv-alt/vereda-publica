@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Vereda Pública</title>
+<meta name="description" content="Vereda Pública é um aplicativo educacional gamificado, estilo trilhas de aprendizagem, para quem estuda para concursos públicos e para profissionais que buscam certificação em Regime Próprio de Previdência Social (RPPS). Produzido pelo IPATE — Instituto de Pesquisas Avançadas em Tecnologia e Educação.">
 <meta name="theme-color" content="#F6C453">
 <link rel="manifest" href="./manifest.json">
 <style>
@@ -646,6 +647,13 @@ sup.ord { text-decoration: underline; text-underline-offset: 1px; font-size: 0.7
 </style>
 
 <div id="app"></div>
+<noscript>
+  <div style="max-width:520px;margin:40px auto;padding:0 20px;font-family:sans-serif;line-height:1.6;color:#1B2A4A;">
+    <h1>Vereda Pública</h1>
+    <p>Aplicativo educacional gamificado, estilo trilhas de aprendizagem, para quem estuda para concursos públicos e para profissionais que buscam certificação em Regime Próprio de Previdência Social (RPPS). Produzido pelo IPATE — Instituto de Pesquisas Avançadas em Tecnologia e Educação.</p>
+    <p><a href="/privacidade.html">Política de Privacidade</a> · <a href="/termos.html">Termos de Serviço</a></p>
+  </div>
+</noscript>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.4/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -4405,6 +4413,7 @@ function renderLoginGate(){
     inner +
     '<div class="footer-note" style="max-width:340px;margin:0 auto;line-height:1.5;">O Vereda Pública é um aplicativo educacional independente, produzido pelo IPATE (Instituto de Pesquisas Avançadas em Tecnologia e Educação), entidade privada. <strong>Não possui vínculo, afiliação ou representação oficial com nenhum órgão ou entidade governamental.</strong> As leis e normativos citados nas questões têm caráter informativo/didático; consulte as fontes oficiais em <a href="https://www.gov.br" target="_blank" style="color:inherit;">gov.br</a> e <a href="https://www.planalto.gov.br/ccivil_03" target="_blank" style="color:inherit;">planalto.gov.br/ccivil_03</a>.</div>' +
     '<div class="footer-note">Precisa de ajuda? <a href="mailto:cefortv@gmail.com" style="color:inherit;">cefortv@gmail.com</a></div>' +
+    '<div class="footer-note"><a href="/privacidade.html" style="color:inherit;">Política de Privacidade</a> · <a href="/termos.html" style="color:inherit;">Termos de Serviço</a></div>' +
   '</div>';
   app.innerHTML = html;
   const goto = (mode) => { loginGateMode = mode; loginGateMsg = null; render(); };
