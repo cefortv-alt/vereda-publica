@@ -3311,7 +3311,13 @@ const sb = (typeof supabase !== "undefined" && supabase.createClient)
         detectSessionInUrl: false,
         storageKey: "vereda-publica-auth",
         storage: (typeof window !== "undefined" && window.localStorage) ? window.localStorage : undefined,
-        flowType: "pkce"
+        // PKCE exige guardar um "code_verifier" no storage antes de sair para o Google e reler
+        // esse mesmo valor quando o app volta — e é exatamente essa etapa que falhava no TWA
+        // ("invalid flow state, no valid flow state found"), provavelmente porque o Android
+        // recicla/reabre o app numa instância que não enxerga mais aquele dado. O fluxo "implicit"
+        // não depende de nada salvo previamente: o Supabase devolve o token de acesso direto na
+        // URL de retorno, então não há estado prévio pra se perder.
+        flowType: "implicit"
       }
     })
   : null;
@@ -3515,29 +3521,29 @@ function finishAuthBoot(){
 }
 function initCloudAuth(){
   if (!sb) { cloudAuthChecked = true; return; }
-  // Retorno do login com Google: tratamos o "code" (fluxo PKCE) explicitamente em vez de confiar
-  // só no detectSessionInUrl automático do supabase-js, que em alguns WebViews/TWA falha calado
-  // (ex.: o code_verifier gravado antes de abrir o Google não está mais acessível quando o app
-  // recebe o retorno) — o usuário só percebe porque volta pra tela de login sem nenhum aviso.
-  // Aqui, se a troca falhar, mostramos o motivo real na tela de login.
+  // Retorno do login com Google (fluxo "implicit"): o token de acesso vem direto no fragmento
+  // (#access_token=...&refresh_token=...) da URL de retorno, sem depender de nada que precisasse
+  // ter sido salvo antes de sair para o Google — diferente do fluxo "pkce" anterior, que falhava
+  // com "invalid flow state" em alguns retornos de TWA/WebView por perder esse dado salvo.
   const searchParams = new URLSearchParams(window.location.search || "");
   const hashParams = new URLSearchParams((window.location.hash || "").replace(/^#/, ""));
   const oauthError = searchParams.get("error_description") || searchParams.get("error") ||
                       hashParams.get("error_description") || hashParams.get("error");
-  const oauthCode = searchParams.get("code");
+  const accessToken = hashParams.get("access_token");
+  const refreshToken = hashParams.get("refresh_token");
   if (oauthError) {
     loginGateMsg = { ok:false, text:"Não foi possível concluir o login com o Google (" + oauthError + "). Tente novamente." };
   }
   const cleanOauthParamsFromUrl = () => {
     if (window.history && window.history.replaceState) {
-      window.history.replaceState({}, document.title, window.location.pathname + window.location.hash.replace(/^#.*/, ""));
+      window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
     }
   };
-  if (oauthCode) {
-    sb.auth.exchangeCodeForSession(window.location.href).then(({ data, error }) => {
+  if (accessToken && refreshToken) {
+    sb.auth.setSession({ access_token: accessToken, refresh_token: refreshToken }).then(({ data, error }) => {
       cleanOauthParamsFromUrl();
       if (error) {
-        console.error("Falha ao concluir login com Google (exchangeCodeForSession):", error);
+        console.error("Falha ao concluir login com Google (setSession):", error);
         loginGateMsg = { ok:false, text:"O login com o Google não foi concluído (" + error.message + "). Tente novamente." };
         cloudAuthChecked = true;
         render();
