@@ -3442,6 +3442,7 @@ async function hydrateFromCloud(user){
       if (profile.onboarding_seen != null) state.onboardingSeen = !!profile.onboarding_seen;
       if (profile.craseando_best != null) state.craseandoBest = profile.craseando_best;
       if (profile.craseando_plays != null) state.craseandoPlays = profile.craseando_plays;
+      if (profile.skips_purchased != null) state.skipsPurchased = profile.skips_purchased;
     }
     if (progressRows) {
       progressRows.forEach(row => {
@@ -3489,11 +3490,12 @@ function pushToCloudNow(){
     onboarding_seen: !!state.onboardingSeen,
     craseando_best: state.craseandoBest || 0,
     craseando_plays: state.craseandoPlays || 0,
+    skips_purchased: state.skipsPurchased || 0,
     updated_at: new Date().toISOString()
   };
   // Colunas adicionadas nesta leva: se a migração ainda não rodou no Supabase, o upsert acima falha
   // por coluna inexistente — reenvia então só com as colunas "base" (já existentes antes desta leva).
-  const NEW_OPTIONAL_COLUMNS = ["total_time_ms","total_answered","total_correct","unit_stats","simulado_historico","forca_wins","trilha_medals","simulados_gerados","onboarding_seen","craseando_best","craseando_plays","unlimited_lives_until","cpf"];
+  const NEW_OPTIONAL_COLUMNS = ["total_time_ms","total_answered","total_correct","unit_stats","simulado_historico","forca_wins","trilha_medals","simulados_gerados","onboarding_seen","craseando_best","craseando_plays","unlimited_lives_until","cpf","skips_purchased"];
   sb.from("profiles").upsert(profileRow).then(({ error }) => {
     if (error) {
       const fallbackRow = {}; Object.keys(profileRow).forEach(k => { if (!NEW_OPTIONAL_COLUMNS.includes(k)) fallbackRow[k] = profileRow[k]; });
@@ -3829,11 +3831,16 @@ function showToast(msg){
 /* ================= PULOS DE BLOCO (skip) =================
    A cada 500 XP acumulados (ao longo de toda a jornada, sem "resetar"), o aluno ganha
    direito a 5 pulos, que permitem acessar diretamente qualquer bloco de qualquer unidade,
-   sem seguir a sequência. state.skipsUsed guarda quantos pulos já foram usados. */
+   sem seguir a sequência. state.skipsUsed guarda quantos pulos já foram usados.
+   A partir de 10-15 o progresso via XP é limitado a FREE_SKIP_CAP pulos gratuitos — além
+   desse teto, só comprando (ver SKIP_PACKAGES / state.skipsPurchased), igual ao ganho
+   extra de XP/vidas via Pix. */
 const SKIP_XP_STEP = 500;
 const SKIP_CREDITS_PER_STEP = 5;
 const SKIP_INITIAL_CREDITS = 3;
-function skipsEarned(){ return SKIP_INITIAL_CREDITS + Math.floor((state.xp || 0) / SKIP_XP_STEP) * SKIP_CREDITS_PER_STEP; }
+const FREE_SKIP_CAP = 15;
+function skipsEarnedFree(){ return Math.min(FREE_SKIP_CAP, SKIP_INITIAL_CREDITS + Math.floor((state.xp || 0) / SKIP_XP_STEP) * SKIP_CREDITS_PER_STEP); }
+function skipsEarned(){ return skipsEarnedFree() + (state.skipsPurchased || 0); }
 function skipsAvailable(){ return Math.max(0, skipsEarned() - (state.skipsUsed || 0)); }
 function useSkip(){
   if (skipsAvailable() <= 0) return false;
@@ -4149,8 +4156,14 @@ const LIFE_PACKAGES = [
   { id: "lifeunlimited", label: "Vidas ilimitadas no mês", price: "R$ 19,67", lives: null, livesDays: 30 },
   { id: "lifeunlimitedyear", label: "Vidas ilimitadas no ano", price: "R$ 129,99", lives: null, livesDays: 365 }
 ];
+// Preços ainda PROVISÓRIOS — pendente de confirmação do Thiago antes de divulgar a loja.
+// Pulos comprados somam-se ao teto gratuito (FREE_SKIP_CAP) em state.skipsPurchased.
+const SKIP_PACKAGES = [
+  { id: "skips5", label: "5 pulos extras", price: "R$ 7,99", skips: 5 },
+  { id: "skips15", label: "15 pulos extras", price: "R$ 19,99", skips: 15 }
+];
 const COMBO_PACKAGE = { id: "comboannual", label: "XP ilimitado + Vidas ilimitadas — 1 ano inteiro", price: "R$ 167,99", xp: null, lives: null, livesDays: 365 };
-const ALL_PACKAGES = XP_PACKAGES.concat(LIFE_PACKAGES).concat([COMBO_PACKAGE]);
+const ALL_PACKAGES = XP_PACKAGES.concat(LIFE_PACKAGES).concat(SKIP_PACKAGES).concat([COMBO_PACKAGE]);
 // Defina aqui a chave Pix (ou "copia e cola") assim que Thiago enviar; enquanto estiver vazia,
 // a loja mostra um aviso de que o pagamento ainda será configurado.
 const PIX_KEY = "00020101021126360014br.gov.bcb.pix0114303580700001875204000053039865802BR5908CEFOR TV6009SAO PAULO622905251M1PBCKD54M6QV4E8GVZYM4ED6304A03B";
@@ -4204,9 +4217,10 @@ function confirmAdminPixOrder(order){
   const pkg = ALL_PACKAGES.find(p => p.id === order.package_id);
   const grantsFiniteXp = !!(pkg && typeof pkg.xp === "number");
   const grantsFiniteLives = !!(pkg && typeof pkg.lives === "number");
+  const grantsFiniteSkips = !!(pkg && typeof pkg.skips === "number");
   const grantsUnlimitedLives = !!(pkg && pkg.livesDays);
   const grantsUnlimitedXp = !!(pkg && pkg.xp === null);
-  const automatable = grantsFiniteXp || grantsFiniteLives || grantsUnlimitedLives;
+  const automatable = grantsFiniteXp || grantsFiniteLives || grantsFiniteSkips || grantsUnlimitedLives;
   const finish = (msg) => {
     adminPixBusyId = null;
     adminPixMsg = msg;
@@ -4225,7 +4239,7 @@ function confirmAdminPixOrder(order){
     markConfirmed(!pkg ? undefined : "Pedido de " + order.user_email + " marcado como confirmado. Este pacote é XP ilimitado — credite manualmente no Supabase, não há automação para isso ainda.");
     return;
   }
-  sb.from("profiles").select("xp,hearts,unlimited_lives_until").eq("id", order.user_id).maybeSingle().then(({ data: profile, error }) => {
+  sb.from("profiles").select("xp,hearts,unlimited_lives_until,skips_purchased").eq("id", order.user_id).maybeSingle().then(({ data: profile, error }) => {
     if (error || !profile) {
       adminPixBusyId = null;
       adminPixMsg = "Não encontrei o perfil de " + order.user_email + " para creditar automaticamente. Confirme manualmente no Supabase.";
@@ -4235,6 +4249,7 @@ function confirmAdminPixOrder(order){
     const updates = {};
     if (grantsFiniteXp) updates.xp = (profile.xp || 0) + pkg.xp;
     if (grantsFiniteLives) updates.hearts = (profile.hearts || 0) + pkg.lives;
+    if (grantsFiniteSkips) updates.skips_purchased = (profile.skips_purchased || 0) + pkg.skips;
     let untilLabel = null;
     if (grantsUnlimitedLives) {
       const now = Date.now();
@@ -4361,9 +4376,13 @@ function attachTopbarListeners(){
   const skipsInfoBtn = document.getElementById("skipsInfoBtn");
   if (skipsInfoBtn) skipsInfoBtn.addEventListener("click", () => {
     const n = skipsAvailable();
+    if (skipsEarnedFree() >= FREE_SKIP_CAP) {
+      xpStoreSelected = null; xpStoreRequestSent = false; xpStoreTab = "pulos"; currentScreen = "xpstore"; render();
+      return;
+    }
     showToast(n > 0
       ? "Você tem "+n+" pulo"+(n===1?"":"s")+" — toque em qualquer bloco trancado para usar."
-      : "Você ganha +"+SKIP_CREDITS_PER_STEP+" pulos a cada "+SKIP_XP_STEP+" XP.");
+      : "Você ganha +"+SKIP_CREDITS_PER_STEP+" pulos a cada "+SKIP_XP_STEP+" XP, até um teto de "+FREE_SKIP_CAP+".");
   });
   const avBtn = document.getElementById("avatarBtn");
   if (avBtn) avBtn.addEventListener("click", () => { avatarPickerOpen = !avatarPickerOpen; render(); });
@@ -4445,6 +4464,7 @@ function render(){
   else if (currentScreen === "errorNotebook") renderErrorNotebookScreen();
   else if (currentScreen === "adminPix") renderAdminPixScreen();
   else if (currentScreen === "courseCertCpf") renderCourseCertCpf();
+  else if (currentScreen === "banco") renderBancoScreen();
   else renderHome();
 }
 let loginGateMode = "start";
@@ -4606,6 +4626,39 @@ function attachTrilhaSwitcherListeners(){
    curar" sozinha se o usuário trocar de trilha com uma Unidade aberta. */
 let openUnitIdx = null;
 
+/* ================= BANNER "INSTALAR O APP" (10/2026, inspirado em concorrente) =================
+   Captura o evento beforeinstallprompt (Android/Chrome) para oferecer instalação com um botão
+   nativo real; no iOS (Safari não dispara esse evento) mostramos instruções manuais de "Adicionar
+   à Tela de Início". Não aparece se o app já estiver rodando instalado (display-mode: standalone)
+   nem se o usuário já dispensou o banner há menos de 14 dias. */
+let deferredInstallPrompt = null;
+const INSTALL_BANNER_COOLDOWN_MS = 14 * 24 * 60 * 60 * 1000;
+function isIOSDevice(){
+  const ua = (typeof window !== "undefined" && window.navigator && window.navigator.userAgent)
+    || (typeof navigator !== "undefined" && navigator.userAgent)
+    || "";
+  return /iPad|iPhone|iPod/.test(ua) && !(typeof window !== "undefined" && window.MSStream);
+}
+function isStandaloneDisplay(){
+  if (typeof window === "undefined") return false;
+  if (window.navigator && window.navigator.standalone) return true;
+  return !!(window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+}
+function shouldShowInstallBanner(){
+  if (isStandaloneDisplay()) return false;
+  if (!deferredInstallPrompt && !isIOSDevice()) return false;
+  const last = state.installPromptDismissedAt;
+  if (last && (Date.now() - last) < INSTALL_BANNER_COOLDOWN_MS) return false;
+  return true;
+}
+if (typeof window !== "undefined" && window.addEventListener) {
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    if (typeof render === "function") render();
+  });
+}
+
 function renderUnitsBlock(trilhaId){
   const mySkips = skipsAvailable();
   const units = unitsForTrilha(trilhaId);
@@ -4692,6 +4745,24 @@ function renderHome(){
   let html = renderTopbar();
   html += renderTrilhaSwitcher();
 
+  if (shouldShowInstallBanner()) {
+    const iosNoPrompt = isIOSDevice() && !deferredInstallPrompt;
+    html += '<div class="promo-banner install-banner" id="installAppBanner" style="display:flex;align-items:center;gap:12px;">' +
+      '<div class="pb-icon">'+(iosNoPrompt ? '📤' : '⬇️')+'</div>' +
+      '<div style="flex:1;min-width:0;"><div class="pb-title">Instalar Vereda Pública</div>' +
+      (iosNoPrompt
+        ? '<div class="pb-sub">Toque no ícone de compartilhar 📤 na barra do Safari e depois em "Adicionar à Tela de Início" para instalar o app no seu iPhone.</div>'
+        : '<div class="pb-sub">Instale o app no seu aparelho para acessar mais rápido, em tela cheia, sem o navegador.</div>') +
+      '</div>' +
+      '<div style="display:flex;flex-direction:column;gap:6px;flex:none;">' +
+        (iosNoPrompt
+          ? '<button type="button" id="installAppDismissBtn" class="btn ghost" style="padding:4px 14px;font-size:12px;white-space:nowrap;">Entendi</button>'
+          : '<button type="button" id="installAppBtn" class="btn primary" style="padding:6px 14px;font-size:13px;white-space:nowrap;">Instalar</button>' +
+            '<button type="button" id="installAppDismissBtn" class="btn ghost" style="padding:4px 14px;font-size:12px;white-space:nowrap;">Agora não</button>') +
+      '</div>' +
+    '</div>';
+  }
+
   if (state.hearts <= 0) {
     html += '<div class="promo-banner demo" id="heartsBanner" style="cursor:pointer;">' +
       '<div class="pb-icon">💤</div>' +
@@ -4722,7 +4793,8 @@ function renderHome(){
   if (state.activeTrilha === "rpps") {
     html += '<button type="button" id="openBookBtn" class="unit-banner" style="width:calc(100% - 36px);text-align:left;cursor:pointer;border:none;margin-bottom:10px;"><div><div class="u-title">📘 Leia a obra completa: Governança, Compliance e Responsabilidade Fiscal nos RPPS</div><div class="u-sub">Toque para abrir o livro</div></div></button>';
     html += '<button type="button" id="openCourseBtn" class="unit-banner" style="width:calc(100% - 36px);text-align:left;cursor:pointer;border:none;margin-bottom:10px;background:var(--gold-deep);color:#fff;"><div><div class="u-title">🎓 Qualificação Continuada</div><div class="u-sub">Toque para abrir nosso Hub de cursos</div></div></button>';
-    html += '<button type="button" id="openTrilhaRppsBtn" class="unit-banner" style="width:calc(100% - 36px);text-align:left;cursor:pointer;border:none;margin-bottom:14px;"><div><div class="u-title">🧭 Trilha da Certificação</div><div class="u-sub">'+completedCount()+' de '+totalLessons()+' lições concluídas · toque para abrir</div></div></button>';
+    html += '<button type="button" id="openTrilhaRppsBtn" class="unit-banner" style="width:calc(100% - 36px);text-align:left;cursor:pointer;border:none;margin-bottom:10px;"><div><div class="u-title">🧭 Trilha da Certificação</div><div class="u-sub">'+completedCount()+' de '+totalLessons()+' lições concluídas · toque para abrir</div></div></button>';
+    html += '<button type="button" id="openBancoBtn" class="unit-banner" style="width:calc(100% - 36px);text-align:left;cursor:pointer;border:none;margin-bottom:14px;"><div><div class="u-title">📚 Banco de Questões</div><div class="u-sub">Treino livre, sem limite e sem gastar vidas — escolha uma disciplina ou sorteie de todas</div></div></button>';
   }
 
   if (simuladoSession && !simuladoSession.finished && simuladoSession.trilha === state.activeTrilha) {
@@ -4751,6 +4823,24 @@ function renderHome(){
   if (howItWorksBtn) howItWorksBtn.addEventListener("click", () => { currentScreen = "onboarding"; render(); });
   const heartsBanner = document.getElementById("heartsBanner");
   if (heartsBanner) heartsBanner.addEventListener("click", renderHeartsWaiting);
+  const installAppBtn = document.getElementById("installAppBtn");
+  if (installAppBtn) installAppBtn.addEventListener("click", () => {
+    if (deferredInstallPrompt) {
+      deferredInstallPrompt.prompt();
+      deferredInstallPrompt.userChoice.then(() => { deferredInstallPrompt = null; });
+      state.installPromptDismissedAt = Date.now();
+      saveState();
+      render();
+    } else if (isIOSDevice()) {
+      showToast("Toque no ícone de compartilhar 📤 e depois em \"Adicionar à Tela de Início\".");
+    }
+  });
+  const installAppDismissBtn = document.getElementById("installAppDismissBtn");
+  if (installAppDismissBtn) installAppDismissBtn.addEventListener("click", () => {
+    state.installPromptDismissedAt = Date.now();
+    saveState();
+    render();
+  });
   const skipPromoBtn = document.getElementById("skipPromoBtn");
   if (skipPromoBtn) skipPromoBtn.addEventListener("click", () => { xpStoreSelected = null; xpStoreRequestSent = false; xpStoreTab = "xp"; currentScreen = "xpstore"; render(); });
   const openBookBtn = document.getElementById("openBookBtn");
@@ -4759,6 +4849,8 @@ function renderHome(){
   if (openCourseBtn) openCourseBtn.addEventListener("click", () => { currentScreen = "courseHub"; render(); });
   const openTrilhaRppsBtn = document.getElementById("openTrilhaRppsBtn");
   if (openTrilhaRppsBtn) openTrilhaRppsBtn.addEventListener("click", () => { currentScreen = "trilhaRpps"; render(); });
+  const openBancoBtn = document.getElementById("openBancoBtn");
+  if (openBancoBtn) openBancoBtn.addEventListener("click", () => { bancoSelectedUnit = null; currentScreen = "banco"; render(); });
   const simuladoResumeBtn = document.getElementById("simuladoResumeBtn");
   if (simuladoResumeBtn) simuladoResumeBtn.addEventListener("click", () => { currentScreen = "simulado"; render(); });
   const simuladoStartCardBtn = document.getElementById("simuladoStartCardBtn");
@@ -4796,6 +4888,77 @@ function renderTrilhaRpps(){
   if (trilhaRppsBackBtn) trilhaRppsBackBtn.addEventListener("click", () => { currentScreen = "home"; render(); });
   attachTopbarListeners();
   attachNavListeners();
+}
+
+/* ================= RENDER: BANCO DE QUESTÕES (treino livre, RPPS) =================
+   Pedido por Thiago (10/2026) após explorar o concorrente arenarpps.com.br: um modo de
+   treino avulso, fora da sequência de Unidades/Blocos — sem vidas, sem XP e sem limite de
+   uso, para o aluno praticar por disciplina ou com questões de toda a trilha RPPS misturadas.
+   Escopo combinado com o Thiago: por ora só a trilha RPPS (não concursos), e sem nova
+   classificação por EC/portaria — reaproveita a divisão por Unidade/disciplina já existente,
+   para não arriscar atribuir uma norma errada a uma questão. Não concede XP de propósito:
+   como os pulos (skips) agora escalam com XP, um treino de uso ilimitado que desse XP
+   furaria o teto de pulos que acabamos de criar. Segue o mesmo padrão de baixo risco já usado
+   no Caderno de Erros/isReview (sem consumir vidas, sem contar nas estatísticas por
+   disciplina) — mas aqui, diferente da revisão espaçada, não dá XP nenhum. */
+let bancoSelectedUnit = null;
+const BANCO_SAMPLE_SIZE = 10;
+function rppsUnitsForBanco(){ return UNITS.filter(u => u.trilha === "rpps"); }
+function startBancoPractice(unitId){
+  const units = unitId ? rppsUnitsForBanco().filter(u => u.id === unitId) : rppsUnitsForBanco();
+  let pool = [];
+  units.forEach(u => u.lessons.forEach(l => { pool = pool.concat(l.pool); }));
+  if (!pool.length) { showToast("Não há questões disponíveis para essa seleção."); return; }
+  const questions = sampleQuestions(pool, Math.min(BANCO_SAMPLE_SIZE, pool.length));
+  session = { ui: null, li: null, qIdx: 0, correctCount: 0, selected: null, answered: false, questions: questions, optOrders: questions.map(q => shuffle(q.options.map((_,i)=>i))), bonusIdx: -1, bonusHit: false, textoBlocoOpen: false, isPractice: true, practiceUnitTitle: unitId ? (units[0] && units[0].title) : "todas as disciplinas RPPS" };
+  render();
+}
+function finishBancoPractice(){
+  const total = session.questions.length;
+  const correctCount = session.correctCount;
+  app.innerHTML = '<div class="overlay"><div class="summary">' +
+    '<div class="stamp">📚</div>' +
+    '<h2 class="display">Treino concluído</h2>' +
+    '<p>Você praticou '+total+' '+(total===1?'questão':'questões')+' de '+session.practiceUnitTitle+' — '+correctCount+' certa'+(correctCount===1?'':'s')+'.</p>' +
+    '<button class="btn primary" id="bancoAgainBtn">Treinar de novo</button>' +
+    '<button class="btn" id="bancoDoneBtn" style="margin-top:8px;">Voltar</button>' +
+  '</div></div>';
+  const unitIdAtEnd = bancoSelectedUnit;
+  const again = document.getElementById("bancoAgainBtn");
+  if (again) again.addEventListener("click", () => { session = null; startBancoPractice(unitIdAtEnd); });
+  const done = document.getElementById("bancoDoneBtn");
+  if (done) done.addEventListener("click", () => { session = null; currentScreen = "banco"; render(); });
+}
+function renderBancoScreen(){
+  const units = rppsUnitsForBanco();
+  let html = renderTopbar();
+  html += '<div class="hero">' +
+    '<div class="eyebrow" style="display:flex;align-items:center;justify-content:space-between;gap:10px;">Banco de Questões · RPPS<button type="button" id="bancoBackBtn" style="border:1px solid var(--paper-line);background:var(--paper-card);color:var(--text-dim);border-radius:8px;padding:2px 9px;font-size:11px;cursor:pointer;">← Voltar</button></div>' +
+    '<h1 class="display">Treino livre</h1>' +
+    '<p>Escolha uma disciplina para treinar só nela, ou sorteie de todas. São '+BANCO_SAMPLE_SIZE+' questões por rodada, sem gastar vidas e sem limite de tentativas — ideal para reforçar um ponto fraco antes do simulado.</p>' +
+  '</div>';
+  html += '<div style="padding:0 18px 10px;"><button type="button" class="podcast-card" data-banco-unit="" style="width:100%;text-align:left;cursor:pointer;border:2px dashed var(--gold);">' +
+    '<div class="pc-icon">🎲</div><div class="pc-body"><div class="pc-title">Todas as disciplinas</div><div class="pc-desc">Questões sorteadas de toda a trilha RPPS</div></div>' +
+  '</button></div>';
+  html += '<div class="podcast-list" style="margin:0 18px 16px;">' +
+    units.map(u => '<button type="button" class="podcast-card" data-banco-unit="'+u.id+'" style="width:100%;text-align:left;cursor:pointer;">' +
+      '<div class="pc-icon">'+u.icon+'</div><div class="pc-body"><div class="pc-title">'+u.title+'</div><div class="pc-desc">'+unitQuestionCount(u)+' questões no banco</div></div>' +
+    '</button>').join('') +
+  '</div>';
+  html += bottomNavHtml();
+
+  app.innerHTML = html;
+  attachTopbarListeners();
+  attachNavListeners();
+  const backBtn = document.getElementById("bancoBackBtn");
+  if (backBtn) backBtn.addEventListener("click", () => { currentScreen = "home"; render(); });
+  document.querySelectorAll("[data-banco-unit]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const uid = btn.dataset.bancoUnit || null;
+      bancoSelectedUnit = uid;
+      startBancoPractice(uid);
+    });
+  });
 }
 
 /* ================= RENDER: LIGA ================= */
@@ -5040,7 +5203,7 @@ function renderXpStoreScreen(){
   html += '<div class="hero">' +
     '<div class="eyebrow">🪙 Loja</div>' +
     '<h1 class="display">Acelere sua trilha</h1>' +
-    '<p>Além dos '+SKIP_CREDITS_PER_STEP+' pulos gratuitos que você ganha a cada '+SKIP_XP_STEP+' XP conquistados, você pode comprar XP extra ou vidas extras via Pix.</p>' +
+    '<p>Além dos '+SKIP_CREDITS_PER_STEP+' pulos gratuitos que você ganha a cada '+SKIP_XP_STEP+' XP conquistados (até um teto de '+FREE_SKIP_CAP+' pulos), você pode comprar XP extra, vidas extras ou mais pulos via Pix.</p>' +
   '</div>';
 
   if (cloudUser && cloudUser.email === ADMIN_EMAIL) {
@@ -5068,17 +5231,23 @@ function renderXpStoreScreen(){
       '<button class="btn" id="backXpStoreBtn" style="margin-top:8px;">Voltar</button>' +
     '</div>';
   } else {
-    const packages = xpStoreTab === "vidas" ? LIFE_PACKAGES : XP_PACKAGES;
-    const packIcon = xpStoreTab === "vidas" ? "❤️" : "🪙";
+    const packages = xpStoreTab === "vidas" ? LIFE_PACKAGES : (xpStoreTab === "pulos" ? SKIP_PACKAGES : XP_PACKAGES);
+    const packIcon = xpStoreTab === "vidas" ? "❤️" : (xpStoreTab === "pulos" ? "🐇" : "🪙");
     html += '<div class="tabbar" style="display:flex;gap:8px;margin:0 18px 4px;">' +
       '<button class="btn'+(xpStoreTab==="xp"?" primary":"")+'" data-tab="xp" style="flex:1;">🪙 XP</button>' +
       '<button class="btn'+(xpStoreTab==="vidas"?" primary":"")+'" data-tab="vidas" style="flex:1;">❤️ Vidas</button>' +
+      '<button class="btn'+(xpStoreTab==="pulos"?" primary":"")+'" data-tab="pulos" style="flex:1;">🐇 Pulos</button>' +
     '</div>';
     if (xpStoreTab === "vidas") {
       html += '<div style="margin:10px 18px 0;">' +
         (hasUnlimitedLives()
           ? '<div class="bonus-badge skip-badge">♥ Vidas ilimitadas ativas até '+new Date(state.unlimitedLivesUntil).toLocaleDateString("pt-BR")+'.</div>'
           : '<p class="pc-desc" style="margin:0;">Você já recebe '+MAX_HEARTS+' vidas, renovadas automaticamente a cada '+Math.round(HEARTS_COOLDOWN_MS/60000)+' minutos. As opções abaixo removem esse limite por um período.</p>') +
+      '</div>';
+    }
+    if (xpStoreTab === "pulos") {
+      html += '<div style="margin:10px 18px 0;">' +
+        '<p class="pc-desc" style="margin:0;">Você ganha pulos gratuitos a cada '+SKIP_XP_STEP+' XP, até um teto de '+FREE_SKIP_CAP+'. Você já tem '+skipsEarnedFree()+' de '+FREE_SKIP_CAP+' pulos gratuitos. As opções abaixo somam pulos extras, sem limite.</p>' +
       '</div>';
     }
     html += '<div class="podcast-list" style="margin:16px 18px;">' +
@@ -6867,11 +7036,11 @@ function startLesson(ui, li){
 function currentQuestion(){ return session.questions[session.qIdx]; }
 
 function renderLesson(){
-  const lesson = (session.isReview || session.isDemo) ? null : UNITS[session.ui].lessons[session.li];
+  const lesson = (session.isReview || session.isDemo || session.isPractice) ? null : UNITS[session.ui].lessons[session.li];
   const q = currentQuestion();
   const total = session.questions.length;
   const pct = Math.round((session.qIdx / total) * 100);
-  const eyebrowLabel = session.isReview ? "📓 Caderno de Erros" : (session.isDemo ? "🎯 Amostra grátis · " + session.demoUnitTitle : lesson.title);
+  const eyebrowLabel = session.isReview ? "📓 Caderno de Erros" : (session.isDemo ? "🎯 Amostra grátis · " + session.demoUnitTitle : (session.isPractice ? "📚 Banco de Questões · " + session.practiceUnitTitle : lesson.title));
 
   let html = '<div class="overlay">' +
     '<div class="overlay-top">' +
@@ -7002,6 +7171,15 @@ function selectAnswer(i){
     playAnswerFx(correct);
     return;
   }
+  if (session.isPractice) {
+    // Banco de Questões (treino livre): mesmo padrão de baixo risco do Caderno de Erros —
+    // não consome vidas, não grava stats de disciplina. Diferente da revisão espaçada,
+    // também não concede XP de propósito, para não furar o teto de pulos via uso ilimitado.
+    if (correct) session.correctCount++;
+    renderLesson();
+    playAnswerFx(correct);
+    return;
+  }
   recordAnswerStat(session.ui, correct);
   if (correct) {
     session.correctCount++;
@@ -7093,6 +7271,8 @@ function nextStep(){
     finishErrorReview();
   } else if (session.isDemo) {
     finishDemoLesson();
+  } else if (session.isPractice) {
+    finishBancoPractice();
   } else {
     finishLesson();
   }
