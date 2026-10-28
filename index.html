@@ -85,7 +85,7 @@
 
   /* ---------- Telas maiores (desktop): aproveita mais a largura e amplia um pouco a leitura ---------- */
   @media (min-width: 900px) {
-    #app { max-width: 900px; }
+    #app { max-width: min(900px, calc(100vw - 252px)); margin: 0 0 0 232px; padding-bottom: 28px; }
     .bottom-nav { max-width: 900px; }
     .q-wrap { max-width: 760px; }
     .onboarding-wrap { max-width: 860px; }
@@ -332,6 +332,25 @@
   .nav-btn.nav-liga svg { color: var(--gold-deep); }
   .bottom-nav.ghost { opacity: 0.24; transition: opacity .2s ease; }
   .bottom-nav.ghost:hover, .bottom-nav.ghost:focus-within, .bottom-nav.ghost:active { opacity: 1; }
+  /* ---------- Desktop: menu inferior vira barra lateral esquerda ---------- */
+  @media (min-width: 900px) {
+    .bottom-nav {
+      top: 0; bottom: 0; left: 0; right: auto; max-width: 212px; width: 212px; margin: 0;
+      flex-direction: column; align-items: stretch; justify-content: flex-start;
+      border-top: none; border-right: 1px solid var(--paper-line);
+      padding: 28px 0; gap: 2px; overflow-y: auto;
+    }
+    .bottom-nav .nav-btn {
+      flex: none; flex-direction: row; justify-content: flex-start; align-items: center;
+      gap: 14px; padding: 13px 26px; font-size: 15px; border-radius: 0 999px 999px 0; text-align: left;
+    }
+    .bottom-nav .nav-btn span { white-space: nowrap; }
+    .bottom-nav .nav-btn svg { width: 22px; height: 22px; flex: none; }
+    .bottom-nav .nav-btn img.nav-icon-img { width: 30px; height: 30px; flex: none; }
+    .bottom-nav .nav-btn[data-screen="errorNotebook"] img.nav-icon-img { width: 36px; height: 36px; margin: 0; }
+    .bottom-nav .nav-btn.active { background: var(--paper); }
+    .bottom-nav .nav-badge-dot { position: static; margin-left: auto; }
+  }
 
   /* ---------- Lesson overlay ---------- */
   .overlay {
