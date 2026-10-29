@@ -85,7 +85,7 @@
 
   /* ---------- Telas maiores (desktop): aproveita mais a largura e amplia um pouco a leitura ---------- */
   @media (min-width: 900px) {
-    #app { max-width: min(900px, calc(100vw - 252px)); margin: 0 0 0 232px; padding-bottom: 28px; }
+    #app { max-width: min(900px, calc(100vw - 288px)); margin: 0 0 0 268px; padding-bottom: 28px; }
     .bottom-nav { max-width: 900px; }
     .q-wrap { max-width: 760px; }
     .onboarding-wrap { max-width: 860px; }
@@ -335,19 +335,19 @@
   /* ---------- Desktop: menu inferior vira barra lateral esquerda ---------- */
   @media (min-width: 900px) {
     .bottom-nav {
-      top: 0; bottom: 0; left: 0; right: auto; max-width: 212px; width: 212px; margin: 0;
-      flex-direction: column; align-items: stretch; justify-content: flex-start;
+      top: 0; bottom: 0; left: 0; right: auto; max-width: 248px; width: 248px; margin: 0;
+      flex-direction: column; align-items: stretch; justify-content: center;
       border-top: none; border-right: 1px solid var(--paper-line);
-      padding: 28px 0; gap: 2px; overflow-y: auto;
+      padding: 28px 0; gap: 10px; overflow-y: auto;
     }
     .bottom-nav .nav-btn {
       flex: none; flex-direction: row; justify-content: flex-start; align-items: center;
-      gap: 14px; padding: 13px 26px; font-size: 15px; border-radius: 0 999px 999px 0; text-align: left;
+      gap: 18px; padding: 18px 30px; font-size: 18px; border-radius: 0 999px 999px 0; text-align: left;
     }
     .bottom-nav .nav-btn span { white-space: nowrap; }
-    .bottom-nav .nav-btn svg { width: 22px; height: 22px; flex: none; }
-    .bottom-nav .nav-btn img.nav-icon-img { width: 30px; height: 30px; flex: none; }
-    .bottom-nav .nav-btn[data-screen="errorNotebook"] img.nav-icon-img { width: 36px; height: 36px; margin: 0; }
+    .bottom-nav .nav-btn svg { width: 28px; height: 28px; flex: none; }
+    .bottom-nav .nav-btn img.nav-icon-img { width: 48px; height: 48px; flex: none; }
+    .bottom-nav .nav-btn[data-screen="errorNotebook"] img.nav-icon-img { width: 56px; height: 56px; margin: 0; }
     .bottom-nav .nav-btn.active { background: var(--paper); }
     .bottom-nav .nav-badge-dot { position: static; margin-left: auto; }
   }
@@ -462,6 +462,16 @@
   .sum-stat.acc .n { color: var(--green); }
 
   .footer-note { text-align: center; font-size: 13.5px; color: var(--text-dim); padding: 24px 20px 8px; }
+  .footer-about { max-width: 340px; margin: 0 auto; line-height: 1.5; }
+  .help-note {
+    display: inline-flex; align-items: center; gap: 6px; margin: 4px auto 0; padding: 8px 14px;
+    border-radius: 999px; background: var(--green-soft); color: var(--green); font-weight: 600;
+  }
+  @media (min-width: 900px) {
+    .footer-note { text-align: left; }
+    .footer-about { max-width: 640px; margin: 0; }
+    .help-note { margin: 4px 0 0; }
+  }
 
   /* ---------- Login gate ---------- */
   .login-gate {
@@ -4561,8 +4571,8 @@ function renderLoginGate(){
       '<button type="button" id="lgDemoBtn" class="btn" style="width:100%;margin-top:6px;">🎯 Experimente uma amostra grátis (sem cadastro)</button>' +
     '</div>' +
     inner +
-    '<div class="footer-note" style="max-width:340px;margin:0 auto;line-height:1.5;">O Vereda Pública é um aplicativo educacional independente, produzido pelo IPATE (Instituto de Pesquisas Avançadas em Tecnologia e Educação), entidade privada. <strong>Não possui vínculo, afiliação ou representação oficial com nenhum órgão ou entidade governamental.</strong> As leis e normativos citados nas questões têm caráter informativo/didático; consulte as fontes oficiais em <a href="https://www4.planalto.gov.br/legislacao/copy_of_home" target="_blank" style="color:inherit;">planalto.gov.br/legislacao</a> e <a href="https://www.gov.br/previdencia/pt-br/assuntos/rpps" target="_blank" style="color:inherit;">gov.br/previdencia/rpps</a>.</div>' +
-    '<div class="footer-note">Precisa de ajuda? <a href="mailto:cefortv@gmail.com" style="color:inherit;">cefortv@gmail.com</a></div>' +
+    '<div class="footer-note footer-about">O Vereda Pública é um aplicativo educacional independente, produzido pelo IPATE (Instituto de Pesquisas Avançadas em Tecnologia e Educação), entidade privada. <strong>Não possui vínculo, afiliação ou representação oficial com nenhum órgão ou entidade governamental.</strong> As leis e normativos citados nas questões têm caráter informativo/didático; consulte as fontes oficiais em <a href="https://www4.planalto.gov.br/legislacao/copy_of_home" target="_blank" style="color:inherit;">planalto.gov.br/legislacao</a> e <a href="https://www.gov.br/previdencia/pt-br/assuntos/rpps" target="_blank" style="color:inherit;">gov.br/previdencia/rpps</a>.</div>' +
+    '<div class="footer-note help-note">💬 Precisa de ajuda? <a href="mailto:rpps@ipate.org.br" style="color:inherit;">rpps@ipate.org.br</a> · <a href="https://wa.me/5561920052779" target="_blank" style="color:inherit;">WhatsApp</a></div>' +
     '<div class="footer-note"><a href="/privacidade.html" style="color:inherit;">Política de Privacidade</a> · <a href="/termos.html" style="color:inherit;">Termos de Serviço</a></div>' +
   '</div>';
   app.innerHTML = html;
@@ -4831,8 +4841,8 @@ function renderHome(){
     html += renderUnitsBlock("concursos");
   }
 
-  html += '<div class="footer-note">Vereda Pública · Precisa de ajuda? <a href="mailto:cefortv@gmail.com" style="color:inherit;">cefortv@gmail.com</a></div>';
-  html += '<div class="footer-note" style="max-width:340px;margin:0 auto;line-height:1.5;">Aplicativo educacional independente, produzido pelo IPATE — sem vínculo com órgãos governamentais. Fontes oficiais das legislações citadas: <a href="https://www4.planalto.gov.br/legislacao/copy_of_home" target="_blank" style="color:inherit;">planalto.gov.br/legislacao</a> e <a href="https://www.gov.br/previdencia/pt-br/assuntos/rpps" target="_blank" style="color:inherit;">gov.br/previdencia/rpps</a>.</div>';
+  html += '<div class="footer-note help-note">💬 Vereda Pública - Precisa de ajuda? <a href="mailto:rpps@ipate.org.br" style="color:inherit;">rpps@ipate.org.br</a> · <a href="https://wa.me/5561920052779" target="_blank" style="color:inherit;">WhatsApp</a></div>';
+  html += '<div class="footer-note footer-about">Aplicativo educacional independente, produzido pelo IPATE — sem vínculo com órgãos governamentais. Fontes oficiais das legislações citadas: <a href="https://www4.planalto.gov.br/legislacao/copy_of_home" target="_blank" style="color:inherit;">planalto.gov.br/legislacao</a> e <a href="https://www.gov.br/previdencia/pt-br/assuntos/rpps" target="_blank" style="color:inherit;">gov.br/previdencia/rpps</a>.</div>';
   html += bottomNavHtml();
 
   app.innerHTML = html;
@@ -4898,7 +4908,7 @@ function renderTrilhaRpps(){
 
   html += renderUnitsBlock("rpps");
 
-  html += '<div class="footer-note">Vereda Pública · Precisa de ajuda? <a href="mailto:cefortv@gmail.com" style="color:inherit;">cefortv@gmail.com</a></div>';
+  html += '<div class="footer-note help-note">💬 Vereda Pública - Precisa de ajuda? <a href="mailto:rpps@ipate.org.br" style="color:inherit;">rpps@ipate.org.br</a> · <a href="https://wa.me/5561920052779" target="_blank" style="color:inherit;">WhatsApp</a></div>';
   html += bottomNavHtml();
 
   app.innerHTML = html;
@@ -5021,7 +5031,7 @@ function renderLeagueScreen(){
   html += '</div>';
   if (!isBottom) html += '<div class="zone-label down" style="margin-top:-6px;margin-bottom:14px;">Zona de rebaixamento</div>';
 
-  html += '<div class="footer-note">Os demais participantes desta liga são exemplos gerados pelo sistema — a disputa com colegas reais chega em breve.</div>';
+  html += '<div class="footer-note">Liga em fase de formação.</div>';
   html += bottomNavHtml();
 
   app.innerHTML = html;
@@ -7034,7 +7044,7 @@ function renderErrorNotebookScreen(){
     html += '<div class="unit-banner"><div><div class="u-title">📓 '+total+' '+(total===1?'questão':'questões')+' no caderno</div><div class="u-sub">'+(due.length ? due.length+' pronta'+(due.length===1?'':'s')+' para revisar agora' : 'Nenhuma pendente agora — volte mais tarde')+'</div></div></div>';
     html += '<div style="padding:0 20px 14px;"><button class="btn primary" id="startReviewBtn" style="width:100%;"'+(due.length?'':' disabled')+'>'+(due.length ? '📓 Revisar agora ('+due.length+')' : 'Nada pendente agora')+'</button></div>';
   }
-  html += '<div class="footer-note">Vereda Pública · Precisa de ajuda? <a href="mailto:cefortv@gmail.com" style="color:inherit;">cefortv@gmail.com</a></div>';
+  html += '<div class="footer-note help-note">💬 Vereda Pública - Precisa de ajuda? <a href="mailto:rpps@ipate.org.br" style="color:inherit;">rpps@ipate.org.br</a> · <a href="https://wa.me/5561920052779" target="_blank" style="color:inherit;">WhatsApp</a></div>';
   html += bottomNavHtml();
   app.innerHTML = html;
   attachTopbarListeners();
