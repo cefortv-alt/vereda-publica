@@ -3872,8 +3872,14 @@ function hasUnlimitedLives(){
   return !!(state.unlimitedLivesUntil && Date.now() < state.unlimitedLivesUntil);
 }
 function ensureHeartsCurrent(){
-  if (state.hearts <= 0 && state.heartsEmptyAt) {
-    if (Date.now() - state.heartsEmptyAt >= HEARTS_COOLDOWN_MS) {
+  if (state.hearts <= 0) {
+    // Vidas zeradas sem um horário válido de "zerou em" (ex.: valor ausente ou inválido vindo da
+    // nuvem, ou relógio do aparelho alterado) deixavam a contagem de 15 min sem ponto de partida e
+    // as vidas nunca voltavam. Nesses casos não há como saber há quanto tempo o aluno espera,
+    // então restauramos de imediato em vez de deixá-lo travado.
+    const t = Number(state.heartsEmptyAt);
+    const invalid = !state.heartsEmptyAt || !isFinite(t) || t > Date.now() + HEARTS_COOLDOWN_MS;
+    if (invalid || Date.now() - t >= HEARTS_COOLDOWN_MS) {
       state.hearts = MAX_HEARTS;
       state.heartsEmptyAt = null;
       saveState();
@@ -4120,6 +4126,7 @@ function finishSimulado(){
   const resultado = { date: new Date().toISOString(), acertos, total: qs.length, timeSpentMs };
   simuladoSession.finished = true;
   simuladoSession.resultado = resultado;
+  bumpStreak();
   if (!Array.isArray(state.simuladoHistorico)) state.simuladoHistorico = [];
   state.simuladoHistorico.push(resultado);
   if (state.simuladoHistorico.length > 20) state.simuladoHistorico = state.simuladoHistorico.slice(-20);
@@ -5110,6 +5117,7 @@ function startBancoPractice(unitId){
   render();
 }
 function finishBancoPractice(){
+  bumpStreak(); saveState();
   const total = session.questions.length;
   const correctCount = session.correctCount;
   app.innerHTML = '<div class="overlay"><div class="summary">' +
@@ -5857,6 +5865,7 @@ function endSpeedRound(){
   if (!speedSession) return;
   speedSession.active = false;
   speedSession.finished = true;
+  bumpStreak(); saveState();
   if (speedSession.score > state.speedHighScore) { state.speedHighScore = speedSession.score; saveState(); }
   if (speedSession.score > 0) {
     // XP do GP é proporcional ao placar, mas com teto (60) pra não superar o XP de uma
@@ -6229,8 +6238,8 @@ function finishForcaGame(){
     xpEarned = Math.max(8, 20 - forcaSession.wrong * 2);
     state.forcaWins++;
     addXP(xpEarned, state.activeTrilha, false);
-    bumpStreak();
   }
+  bumpStreak();
   saveState();
   forcaSession.xpEarned = xpEarned;
   renderForcaSummary();
@@ -9428,6 +9437,7 @@ function finishCourseModulo(){
   const pct = total > 0 ? correctCount / total : 0;
   const course = COURSE_BY_ID[activeCourseId];
   const prog = courseProgressFor(course.id);
+  bumpStreak(); // qualquer atividade concluída conta para a ofensiva, passando ou não no checkpoint
   const xpTrilha = course.id === COURSE_CRP.id ? "rpps" : course.id;
   if (courseSession.isFinal) {
     const passed = pct >= (course.avaliacaoFinalMinPct || course.checkpointMinPct);
@@ -9746,6 +9756,7 @@ function finishErrorReview(){
   const correctCount = session.correctCount;
   const earnedXP = correctCount * 5;
   if (earnedXP) addXP(earnedXP, state.activeTrilha, false);
+  bumpStreak();
   saveState();
   app.innerHTML = '<div class="overlay"><div class="summary">' +
     '<div class="stamp">📓</div>' +
